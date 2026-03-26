@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true, // Critical for importing your .json Contract ABIs
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",           // Set to root so paths resolve correctly from src
+    "paths": {
+      "@/*": ["src/*"]        // Optional: allows cleaner imports like '@/lands/land.service'
+    },
+    "sourceMap": true,        // Helpful for debugging TypeScript in Kali
+    "declaration": true,      // Generates .d.ts files if you share types with the frontend
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
+}

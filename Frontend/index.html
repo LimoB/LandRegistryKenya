@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <title>LandLedger | National Digital Property Registry</title>
+    <meta name="title" content="LandLedger | Immutable Land Ownership" />
+    <meta name="description" content="Official national portal for blockchain-based land registration and title verification." />
+
+    <meta name="theme-color" content="#2563eb" />
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+
+    <style>
+      /* Prevent "White Flash" on load in Dark Mode 
+         Matches your bg-[#fafafa] and dark:bg-slate-950
+      */
+      :root {
+        background-color: #fafafa;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background-color: #020617; /* slate-950 */
+        }
+      }
+      body {
+        margin: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+    </style>
+  </head>
+  <body class="selection:bg-blue-600 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
