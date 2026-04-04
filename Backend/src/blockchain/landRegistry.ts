@@ -1,15 +1,12 @@
 import { ethers } from "ethers";
 import { officerWallet } from "./provider";
 import dotenv from "dotenv";
-
-// Import the artifact Truffle generated during migration
 import LandRegistryArtifact from "./artifacts/LandRegistry.json";
 
 dotenv.config();
 
 const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS || "";
 
-// Use the .abi property inside the artifact
 export const landRegistryContract = new ethers.Contract(
   CONTRACT_ADDRESS,
   LandRegistryArtifact.abi, 
@@ -26,9 +23,10 @@ export const registerLandOnChain = async (
   ipfsHash: string
 ) => {
   try {
-    // Note: Ensure this matches the function name in Land.sol
+    // This sends the transaction
     const tx = await landRegistryContract.registerInitialLand(ownerWallet, lrNumber, ipfsHash);
-    return await tx.wait();
+    // This waits for the block to be mined and returns the Receipt
+    return await tx.wait(); 
   } catch (error) {
     console.error("Blockchain Registration Failed:", error);
     throw error;

@@ -1,19 +1,28 @@
 import { ethers } from "ethers";
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
+import path from "path";
 
-dotenv.config();
+// 1. Force override to ensure we use the NEW key immediately
+dotenv.config({ 
+  path: path.resolve(__dirname, "../../.env"),
+  override: true 
+});
 
-const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || "http://127.0.0.1:8545"; // Ganache/Hardhat default
-const PRIVATE_KEY = process.env.OFFICER_PRIVATE_KEY || ""; // The Land Officer's wallet key
+const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || "http://127.0.0.1:7545";
+const PRIVATE_KEY = process.env.OFFICER_PRIVATE_KEY;
 
 if (!PRIVATE_KEY) {
-  console.warn("⚠️ Warning: OFFICER_PRIVATE_KEY is not set in .env");
+  throw new Error("❌ CRITICAL: OFFICER_PRIVATE_KEY is missing from .env");
 }
 
-// 1. Connection to the Network
+// 2. Initialize Provider
 export const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-// 2. The "Signer" (The Land Officer's identity on-chain)
-export const officerWallet = new ethers.Wallet(PRIVATE_KEY, provider);
+// 3. Initialize Officer Wallet (Signer)
+export const officerWallet = new ethers.Wallet(PRIVATE_KEY.trim(), provider);
 
-console.log("🔗 Blockchain Provider Initialized");
+console.log("\n--- 🛡️  Land Ledger Registry: Blockchain Initialized ---");
+console.log(`📡 Network: ${RPC_URL}`);
+console.log(`👤 Officer Address: ${officerWallet.address}`);
+console.log(`🔑 Key Loaded: ${PRIVATE_KEY.substring(0, 6)}...${PRIVATE_KEY.substring(PRIVATE_KEY.length - 4)}`);
+console.log("------------------------------------------------------\n");
