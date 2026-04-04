@@ -1,32 +1,48 @@
-# Logs
+# --- Dependencies ---
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# --- Environment & Security ---
+# NEVER commit your .env or private keys!
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# --- Build Outputs ---
+dist/
+dist-ssr/
+build/
+**/dist/
+**/build/
+# Truffle build folder containing compiled contracts
+Truffle/build/
+.next/
+out/
+
+# --- Logs ---
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-./Backend/node_modules
-./Backend/dist
-./Backend/dist-ssr
-./Backend/*.local
-
-./Frontend/node_modules
-./Frontend/dist
-./Frontend/dist-ssr
-./Frontend/*.local
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# --- Editor & OS Files ---
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+.DS_Store
+Thumbs.db
+
+# --- Testing ---
+coverage/
+**/coverage/
+.nyc_output/
