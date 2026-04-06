@@ -17,6 +17,25 @@ import {
   EyeOff
 } from "lucide-react";
 
+// --- Types & Interfaces ---
+
+interface InputFieldProps {
+  icon: React.ReactNode;
+  type?: string;
+  name: string;
+  placeholder: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+// Interface for the expected API Error structure
+interface ApiError {
+  data?: {
+    message?: string;
+  };
+  message?: string;
+}
+
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
     email: "",
@@ -42,12 +61,15 @@ const Login: React.FC = () => {
     const loadingToast = toast.loading("Verifying Ledger Access...");
     
     try {
+      // res is automatically typed based on your useLoginMutation definition
       const res = await login({ 
         email: formData.email, 
         password: formData.password 
       }).unwrap();
       
       dispatch(setCredentials(res));
+      
+      // Safe access using optional chaining
       const rawName = res.user?.fullName || res.user?.name || "User";
       const firstName = rawName.trim().split(/\s+/)[0];
 
@@ -63,8 +85,10 @@ const Login: React.FC = () => {
       };
 
       navigate(routes[res.user.role] || "/dashboard");
-    } catch (err: any) {
-      const msg = err.data?.message || err.message || "Credential verification failed.";
+    } catch (err: unknown) {
+      // Cast err to our ApiError type safely
+      const error = err as ApiError;
+      const msg = error.data?.message || error.message || "Credential verification failed.";
       toast.error(msg, { id: loadingToast });
     }
   };
@@ -72,7 +96,7 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-[#fafafa] dark:bg-slate-950 font-sans selection:bg-blue-100 selection:text-blue-900">
       
-      {/* --- Left Side: Form (Matched to Register Style) --- */}
+      {/* --- Left Side: Form --- */}
       <div className="flex items-center justify-center p-6 md:p-12 lg:p-20 relative overflow-hidden">
         {/* Ambient Glow */}
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-100/50 dark:bg-blue-900/10 blur-[120px] rounded-full pointer-events-none" />
@@ -94,7 +118,6 @@ const Login: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-5">
-              {/* Email Input - Size Matched to Register */}
               <InputField 
                 icon={<Mail size={18} />} 
                 type="email"
@@ -104,7 +127,6 @@ const Login: React.FC = () => {
                 onChange={handleInputChange}
               />
 
-              {/* Password Input - Size Matched to Register */}
               <div className="relative group">
                 <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none">
                   <Lock size={18} />
@@ -175,7 +197,7 @@ const Login: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Right Side: Visual Panel (Matched to Register) --- */}
+      {/* --- Right Side: Visual Panel --- */}
       <section className="hidden lg:flex bg-blue-600 items-center justify-center relative overflow-hidden m-4 rounded-[3rem] shadow-2xl">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700">
             <div className="absolute top-0 -right-20 w-[500px] h-[500px] bg-blue-400/20 blur-[100px] rounded-full animate-pulse" />
@@ -214,8 +236,8 @@ const Login: React.FC = () => {
   );
 };
 
-// --- Reusable Component (Exact Match to Register) ---
-const InputField = ({ icon, type = "text", name, placeholder, value, onChange }: any) => (
+// --- Reusable Component ---
+const InputField: React.FC<InputFieldProps> = ({ icon, type = "text", name, placeholder, value, onChange }) => (
   <div className="relative group">
     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none">
         {icon}

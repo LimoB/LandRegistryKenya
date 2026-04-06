@@ -4,11 +4,18 @@ import {
   ShieldCheck, 
   ArrowRight, 
   Fingerprint, 
-  // GanttChartSquare, 
   Lock, 
   QrCode,
   Globe
 } from "lucide-react";
+
+// 1. Define an Interface for the FeatureCard props
+// This replaces the 'any' and tells TypeScript exactly what to expect.
+interface FeatureCardProps {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+}
 
 const Home: React.FC = () => {
   return (
@@ -118,7 +125,8 @@ const Home: React.FC = () => {
   );
 };
 
-const FeatureCard = ({ icon, title, desc }: any) => (
+// 2. Apply the interface to the component
+const FeatureCard: React.FC<FeatureCardProps> = ({ icon, title, desc }) => (
     <div className="space-y-4 group">
         <div className="w-14 h-14 bg-white dark:bg-slate-950 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-center group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
             {icon}

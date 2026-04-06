@@ -19,6 +19,25 @@ import {
   ChevronDown
 } from "lucide-react";
 
+// --- Types & Interfaces ---
+
+interface InputFieldProps {
+  icon: React.ReactNode;
+  type?: string;
+  name: string;
+  placeholder: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  isMono?: boolean;
+}
+
+interface ApiError {
+  data?: {
+    message?: string;
+  };
+  message?: string;
+}
+
 const Register: React.FC = () => {
   const [form, setForm] = useState({
     fullName: "",
@@ -54,8 +73,9 @@ const Register: React.FC = () => {
       await register(form).unwrap();
       toast.success("Identity Provisioned!", { id: loadingToast });
       navigate("/login");
-    } catch (err: any) {
-      const msg = err.data?.message || "Registration rejected.";
+    } catch (err: unknown) {
+      const error = err as ApiError;
+      const msg = error.data?.message || error.message || "Registration rejected.";
       toast.error(msg, { id: loadingToast });
     }
   };
@@ -85,7 +105,6 @@ const Register: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Full Name */}
               <InputField 
                 icon={<User size={18} />} 
                 name="fullName" 
@@ -94,7 +113,6 @@ const Register: React.FC = () => {
                 onChange={handleChange} 
               />
               
-              {/* Email */}
               <InputField 
                 icon={<Mail size={18} />} 
                 type="email"
@@ -104,7 +122,6 @@ const Register: React.FC = () => {
                 onChange={handleChange} 
               />
 
-              {/* ID Number */}
               <InputField 
                 icon={<FileDigit size={18} />} 
                 name="idNumber" 
@@ -129,7 +146,6 @@ const Register: React.FC = () => {
               </div>
             </div>
 
-            {/* Wallet Address */}
             <InputField 
                 icon={<Wallet size={18} />} 
                 name="walletAddress" 
@@ -139,7 +155,6 @@ const Register: React.FC = () => {
                 isMono
             />
 
-            {/* Password */}
             <InputField 
                 icon={<Lock size={18} />} 
                 type="password"
@@ -176,9 +191,8 @@ const Register: React.FC = () => {
         </div>
       </div>
 
-      {/* --- Right Side: The "Liquid" Visual Panel --- */}
+      {/* --- Right Side: The Visual Panel --- */}
       <section className="hidden lg:flex bg-blue-600 items-center justify-center relative overflow-hidden m-4 rounded-[3rem] shadow-2xl">
-        {/* Animated Liquid Background Gradient */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700">
             <div className="absolute top-0 -right-20 w-[500px] h-[500px] bg-blue-400/20 blur-[100px] rounded-full animate-pulse" />
             <div className="absolute bottom-0 -left-20 w-[500px] h-[500px] bg-indigo-900/30 blur-[100px] rounded-full" />
@@ -217,9 +231,9 @@ const Register: React.FC = () => {
   );
 };
 
-// --- Reusable Sub-Components for Clean Code ---
+// --- Reusable Sub-Components ---
 
-const InputField = ({ icon, type = "text", name, placeholder, value, onChange, isMono = false }: any) => (
+const InputField: React.FC<InputFieldProps> = ({ icon, type = "text", name, placeholder, value, onChange, isMono = false }) => (
   <div className="relative group">
     <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none">
         {icon}
@@ -236,7 +250,7 @@ const InputField = ({ icon, type = "text", name, placeholder, value, onChange, i
   </div>
 );
 
-const InfoItem = ({ icon, text }: { icon: React.ReactNode, text: string }) => (
+const InfoItem: React.FC<{ icon: React.ReactNode, text: string }> = ({ icon, text }) => (
     <div className="flex items-center gap-4 text-white font-black text-[12px] uppercase tracking-[0.2em] group cursor-default">
         <span className="bg-white/10 p-2.5 rounded-2xl border border-white/10 shadow-lg group-hover:scale-110 transition-transform">{icon}</span>
         {text}
