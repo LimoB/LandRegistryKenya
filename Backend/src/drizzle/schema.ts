@@ -44,6 +44,7 @@ export const lands = pgTable("lands", {
   // Blockchain Sync
   onChainId: integer("on_chain_id"), // Maps to LandParcel.id in Solidity
   ipfsDocHash: text("ipfs_doc_hash"), 
+  blockchainTxHash: varchar("blockchain_tx_hash", { length: 255 }),
   
   verificationStatus: verificationStatusEnum("verification_status").default("pending"),
   isForSale: boolean("is_for_sale").default(false),

@@ -20,7 +20,7 @@
     "ethereum",
     "kenya"
   ],
-  "author": "",
+  "author": "Boaz Lee-Limo",
   "license": "ISC",
   "packageManager": "pnpm@10.24.0",
   "dependencies": {

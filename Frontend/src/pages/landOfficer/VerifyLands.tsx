@@ -12,8 +12,30 @@ import {
 } from "lucide-react";
 
 /**
+ * Interface for Blockchain Event Logs
+ */
+interface LandRegisteredEvent {
+  event?: string;
+  args?: {
+    id: {
+      toNumber: () => number;
+    };
+  };
+}
+
+/**
+ * Interface for Blockchain/API Errors
+ */
+interface TransactionError {
+  reason?: string;
+  message?: string;
+  data?: {
+    error?: string;
+  };
+}
+
+/**
  * Extending the base Land type to include nested owner data 
- * if your landApi.ts doesn't already define it.
  */
 interface ExtendedLand extends Land {
   owner?: {
@@ -24,19 +46,19 @@ interface ExtendedLand extends Land {
 }
 
 const VerifyLands: React.FC = () => {
-  // 1. Get lands from API
   const { data: lands, isLoading } = useGetLandsQuery();
   const [verifyLand, { isLoading: isBackendUpdating }] = useVerifyLandMutation();
   const { getContract, connectWallet } = useBlockchain();
   
   const [isMinting, setIsMinting] = useState(false);
 
-  // 2. FIXED: Changed 'allLands' to 'lands' to match the variable from useGetLandsQuery
-  const pendingLands = (lands as ExtendedLand[])?.filter(
-    (land) => land.verificationStatus === 'pending'
-  ) || [];
+  // Cast the API response to our Extended type safely
+  const typedLands = (lands as unknown as ExtendedLand[]) || [];
 
-  // 3. FIXED: Added 'ExtendedLand' type to parameter to stop 'implicitly any' error
+  const pendingLands = typedLands.filter(
+    (land) => land.verificationStatus === 'pending'
+  );
+
   const handleApproveAndMint = async (land: ExtendedLand) => {
     setIsMinting(true);
     try {
@@ -54,9 +76,10 @@ const VerifyLands: React.FC = () => {
 
       const receipt = await transaction.wait();
       
-      // Extract ID from blockchain events
-      const event = receipt.events?.find((e: any) => e.event === "LandRegistered");
-      const onChainId = event ? event.args.id.toNumber() : Math.floor(Math.random() * 100000);
+      // FIXED: Replaced 'any' with LandRegisteredEvent interface
+      const event = receipt.events?.find((e: LandRegisteredEvent) => e.event === "LandRegistered") as LandRegisteredEvent | undefined;
+      
+      const onChainId = event?.args ? event.args.id.toNumber() : Math.floor(Math.random() * 100000);
 
       // Update the Backend
       await verifyLand({ 
@@ -68,9 +91,11 @@ const VerifyLands: React.FC = () => {
       }).unwrap();
       
       alert(`Success! Asset ${land.lrNumber} is now secured on-chain.`);
-    } catch (err: any) {
-      console.error("Verification failed", err);
-      alert(err.reason || "Blockchain error. Verify your wallet is connected to the right network.");
+    } catch (err: unknown) {
+      // FIXED: Replaced 'any' with type checking
+      const error = err as TransactionError;
+      console.error("Verification failed", error);
+      alert(error.reason || error.message || "Blockchain error. Verify your wallet is connected.");
     } finally {
       setIsMinting(false);
     }
@@ -125,18 +150,20 @@ const VerifyLands: React.FC = () => {
 
               <div className="flex items-center gap-3">
                 <button 
+                  type="button"
                   disabled={isMinting || isBackendUpdating}
                   className="px-6 py-3 rounded-xl text-red-500 text-[10px] font-black uppercase hover:bg-red-50 disabled:opacity-30"
                 >
                   Reject
                 </button>
                 <button 
+                  type="button"
                   disabled={isMinting || isBackendUpdating}
                   onClick={() => handleApproveAndMint(land)}
                   className="bg-emerald-600 text-white text-[10px] font-black uppercase px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 disabled:opacity-50 transition-all active:scale-95"
                 >
-                  {isMinting ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />}
-                  {isMinting ? "MINTING..." : "Approve & Mint"}
+                  {isMinting || isBackendUpdating ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle size={14} />}
+                  {isMinting || isBackendUpdating ? "PROCESSING..." : "Approve & Mint"}
                 </button>
               </div>
             </div>

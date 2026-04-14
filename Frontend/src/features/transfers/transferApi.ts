@@ -12,8 +12,6 @@ export interface TransferRequest {
   mpesaReceiptCode: string;
   blockchainTxHash?: string;
   createdAt: string;
-
-  // Added these nested objects to match the Backend 'with' query
   land: {
     lrNumber: string;
     county?: string;
@@ -35,21 +33,13 @@ export interface InitiateTransferPayload {
   mpesaReceiptCode: string;
 }
 
-export interface ApproveTransferPayload {
-  blockchainTxHash: string;
-  status: string; 
-}
-
 /* ================================
    TRANSFER API
 ================================ */
 export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     // 1️⃣ Initiate Transfer (Buyer)
-    initiateTransfer: builder.mutation<
-      { message: string; request: TransferRequest },
-      InitiateTransferPayload
-    >({
+    initiateTransfer: builder.mutation<{ message: string; request: TransferRequest }, InitiateTransferPayload>({
       query: (body) => ({
         url: "/transfers/initiate",
         method: "POST",
@@ -64,15 +54,27 @@ export const transferApi = baseApi.injectEndpoints({
       providesTags: ["Transfer"],
     }),
 
-    // 3️⃣ Approve Transfer (Officer)
-    approveTransfer: builder.mutation<
-      TransferRequest,
-      { id: number; payload: ApproveTransferPayload }
-    >({
-      query: ({ id, payload }) => ({
+    // 3️⃣ Get My Sales (Seller)
+    getMySales: builder.query<TransferRequest[], void>({
+      query: () => "/transfers/my-sales",
+      providesTags: ["Transfer"],
+    }),
+
+    // 4️⃣ Approve Transfer (Officer)
+    approveTransfer: builder.mutation<{ message: string; txHash: string }, number>({
+      query: (id) => ({
         url: `/transfers/approve/${id}`,
         method: "PATCH",
-        body: payload,
+      }),
+      invalidatesTags: ["Transfer", "Land"], // Invalidate Land to show new owner
+    }),
+
+    // 5️⃣ Reject Transfer (Officer)
+    rejectTransfer: builder.mutation<{ message: string }, { id: number; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/transfers/reject/${id}`,
+        method: "PATCH",
+        body: { reason },
       }),
       invalidatesTags: ["Transfer"],
     }),
@@ -82,5 +84,7 @@ export const transferApi = baseApi.injectEndpoints({
 export const {
   useInitiateTransferMutation,
   useGetPendingTransfersQuery,
+  useGetMySalesQuery,
   useApproveTransferMutation,
+  useRejectTransferMutation,
 } = transferApi;

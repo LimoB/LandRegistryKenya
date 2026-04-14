@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from "react";
+// Import type explicitly for ChangeEvent to satisfy verbatimModuleSyntax
+import type { ChangeEvent } from "react";
 import { 
   useGetLandsQuery 
 } from "../../features/lands/landApi";
@@ -12,6 +14,28 @@ import {
   History
 } from "lucide-react";
 
+// Define the Owner interface
+interface LandOwner {
+  fullName: string;
+  email: string;
+  idNumber: string;
+  walletAddress: string;
+}
+
+// Fixed: sizeInAcres changed to number to match your API/Land type
+interface LandRecord {
+  id: number;
+  lrNumber: string;
+  onChainId: number | null;
+  verificationStatus: "pending" | "verified" | "rejected";
+  sizeInAcres: number; 
+  priceInKsh: number | null;
+  landType: string;
+  county: string;
+  ipfsDocHash?: string;
+  owner?: LandOwner;
+}
+
 const RegistrySearch: React.FC = () => {
   const { data: allLands, isLoading } = useGetLandsQuery();
   const [searchTerm, setSearchTerm] = useState("");
@@ -19,19 +43,31 @@ const RegistrySearch: React.FC = () => {
 
   // Optimized Search Logic
   const filteredResults = useMemo(() => {
-    if (!allLands) return [];
+    if (!allLands) return [] as LandRecord[];
     
-    return allLands.filter((land) => {
+    // Safely convert types using 'unknown' to bypass strict overlap checks
+    const lands = (allLands as unknown) as LandRecord[];
+
+    return lands.filter((land) => {
+      const search = searchTerm.toLowerCase();
+      
       const matchesSearch = 
-        land.lrNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (land as any).owner?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (land as any).owner?.walletAddress?.toLowerCase().includes(searchTerm.toLowerCase());
+        land.lrNumber.toLowerCase().includes(search) ||
+        land.owner?.fullName?.toLowerCase().includes(search) ||
+        land.owner?.walletAddress?.toLowerCase().includes(search);
       
       const matchesFilter = filterType === "all" || land.verificationStatus === filterType;
       
       return matchesSearch && matchesFilter;
     });
   }, [allLands, searchTerm, filterType]);
+
+  // Type-safe change handlers
+  const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value);
+  
+  const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setFilterType(e.target.value as "all" | "verified" | "pending");
+  };
 
   return (
     <div className="p-8 max-w-[1600px] mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-500">
@@ -54,22 +90,21 @@ const RegistrySearch: React.FC = () => {
                 placeholder="Search by LR Number, Owner Name, or Wallet Address (0x...)"
                 className="w-full bg-white/10 dark:bg-slate-100 border border-white/20 dark:border-slate-200 rounded-2xl py-5 pl-12 pr-4 text-sm font-medium outline-none focus:ring-4 ring-blue-500/30 transition-all placeholder:text-slate-400"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={handleSearchChange}
               />
             </div>
             
             <select 
               className="bg-white/10 dark:bg-slate-100 border border-white/20 dark:border-slate-200 rounded-2xl px-6 py-5 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
+              onChange={handleFilterChange}
             >
-              <option value="all">All Records</option>
-              <option value="verified">Verified Only</option>
-              <option value="pending">Pending Review</option>
+              <option value="all" className="text-slate-900">All Records</option>
+              <option value="verified" className="text-slate-900">Verified Only</option>
+              <option value="pending" className="text-slate-900">Pending Review</option>
             </select>
           </div>
         </div>
-        {/* Decorative background element */}
         <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
       </div>
 
@@ -100,7 +135,7 @@ const RegistrySearch: React.FC = () => {
                     <h3 className="text-lg font-black dark:text-white tracking-tight italic uppercase">{land.lrNumber}</h3>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter flex items-center gap-1">
-                        <Database size={12} /> On-Chain ID: {land.onChainId || "N/A"}
+                        <Database size={12} /> On-Chain ID: {land.onChainId ?? "N/A"}
                       </span>
                       <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${
                         land.verificationStatus === 'verified' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
@@ -115,10 +150,10 @@ const RegistrySearch: React.FC = () => {
                 <div className="flex flex-col lg:items-end flex-1">
                     <div className="flex items-center gap-2 text-slate-900 dark:text-white font-black text-sm">
                         <User size={14} className="text-blue-600" />
-                        {(land as any).owner?.fullName}
+                        {land.owner?.fullName ?? "Unknown Owner"}
                     </div>
                     <p className="text-[10px] font-mono text-slate-400 mt-1 truncate w-48 text-right">
-                        {(land as any).owner?.walletAddress}
+                        {land.owner?.walletAddress ?? "No Wallet Linked"}
                     </p>
                 </div>
 
@@ -138,10 +173,10 @@ const RegistrySearch: React.FC = () => {
 
                 {/* Actions */}
                 <div className="flex items-center gap-2">
-                    <button className="p-4 bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-blue-600 rounded-2xl transition-all">
+                    <button type="button" className="p-4 bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-blue-600 rounded-2xl transition-all">
                         <History size={18} />
                     </button>
-                    <button className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
+                    <button type="button" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
                         View Full Details
                         <ChevronRight size={14} />
                     </button>

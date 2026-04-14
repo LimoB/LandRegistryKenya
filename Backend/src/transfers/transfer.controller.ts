@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import { 
     createTransferRequestService, 
     approveTransferService, 
-    getPendingTransfersService 
+    getPendingTransfersService, 
+    getSellerTransfersService,
+    rejectTransferService
 } from "./transfer.service";
 
 /* ================================
@@ -40,22 +42,21 @@ export const initiateTransfer = async (req: Request, res: Response) => {
 export const approveTransfer = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { blockchainTxHash } = req.body;
     const officerId = (req as any).user?.userId;
 
+    // 1. Verify Authentication
     if (!officerId) {
       return res.status(401).json({ error: "Only authorized officers can sign transfers" });
     }
 
-    if (!blockchainTxHash) {
-      return res.status(400).json({ error: "Blockchain receipt hash is required" });
-    }
-
-    const result = await approveTransferService(Number(id), blockchainTxHash, officerId);
+    // 2. Call Service (Service now handles the Blockchain call internally)
+    const result = await approveTransferService(Number(id), officerId);
     
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    // 400 for business logic errors, 500 for blockchain/network failures
+    const statusCode = error.message.includes("Blockchain") ? 500 : 400;
+    res.status(statusCode).json({ error: error.message });
   }
 };
 
@@ -69,4 +70,34 @@ export const getPending = async (_req: Request, res: Response) => {
     } catch (error: any) {
         res.status(500).json({ error: "Failed to fetch pending requests" });
     }
+};
+
+
+/* ================================
+   REJECT TRANSFER (Officer)
+================================ */
+export const rejectTransfer = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body; // Good practice to ask why it was rejected
+    const officerId = (req as any).user?.userId;
+
+    const result = await rejectTransferService(Number(id), officerId, reason);
+    res.status(200).json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+/* ================================
+   GET SELLER SALES (Seller)
+================================ */
+export const getMySales = async (req: Request, res: Response) => {
+  try {
+    const sellerId = (req as any).user?.userId;
+    const sales = await getSellerTransfersService(sellerId);
+    res.status(200).json(sales);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to fetch sales history" });
+  }
 };

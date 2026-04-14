@@ -1,14 +1,25 @@
 import { Router } from "express";
-import { initiateTransfer, approveTransfer, getPending } from "./transfer.controller";
+import { 
+    initiateTransfer, 
+    approveTransfer, 
+    getPending, 
+    rejectTransfer, 
+    getMySales 
+} from "./transfer.controller";
 import { authMiddleware, officerOnly, citizenOnly } from "../middleware/bearAuth";
 
 export const transferRouter: Router = Router();
 
-// Citizens (Buyers) initiate the transfer by providing M-Pesa proof
+// --- CITIZEN ROUTES ---
+// Initiate a new purchase
 transferRouter.post("/initiate", authMiddleware, citizenOnly, initiateTransfer);
+// See land you are selling (Inbound requests)
+transferRouter.get("/my-sales", authMiddleware, citizenOnly, getMySales);
 
-// Land Officers view all pending requests to verify M-Pesa codes
+// --- OFFICER ROUTES ---
+// View all pending for verification
 transferRouter.get("/pending", authMiddleware, officerOnly, getPending);
-
-// Land Officers approve and link the Blockchain Hash
+// Finalize on blockchain
 transferRouter.patch("/approve/:id", authMiddleware, officerOnly, approveTransfer);
+// Reject fraudulent/incorrect requests
+transferRouter.patch("/reject/:id", authMiddleware, officerOnly, rejectTransfer);

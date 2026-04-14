@@ -2,8 +2,22 @@ import { baseApi } from "../../app/api/baseApi";
 import { setCredentials } from "../../app/slices/authSlice";
 
 /* ================================
-   TYPES (Match Backend Exactly)
+   TYPES
 ================================ */
+export interface User {
+  id: number;
+  fullName: string;
+  email: string;
+  role: "admin" | "land_officer" | "citizen";
+  walletAddress: string;
+}
+
+export interface AuthResponse {
+  message: string;
+  token: string;
+  user: User;
+}
+
 export interface RegisterPayload {
   fullName: string;
   email: string;
@@ -16,20 +30,6 @@ export interface RegisterPayload {
 export interface LoginPayload {
   email: string;
   password: string;
-}
-
-// Fixed: Added fullName to the user object inside the response
-export interface AuthResponse {
-  message: string;
-  token: string;
-  user: {
-    [x: string]: string;
-    id: number;
-    fullName: string; // <--- Added this to resolve the TS error
-    email: string;
-    role: "admin" | "land_officer" | "citizen";
-    walletAddress: string;
-  };
 }
 
 /* ================================
@@ -49,20 +49,19 @@ export const authApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
-
-          // Now 'data' (AuthResponse) matches the expected 'User' type in setCredentials
+          // Dispatches the typed AuthResponse to your auth slice
           dispatch(setCredentials(data));
-        } catch (err) {
-          console.error("Login failed:", err);
+        } catch (err: unknown) {
+          // Avoiding 'any' here as well
+          if (err && typeof err === 'object' && 'error' in err) {
+             console.error("Login failed:", err);
+          }
         }
       },
     }),
 
     // 📝 REGISTER
-    register: builder.mutation<
-      { message: string; user: any },
-      RegisterPayload
-    >({
+    register: builder.mutation<{ message: string; user: User }, RegisterPayload>({
       query: (data) => ({
         url: "/auth/register",
         method: "POST",

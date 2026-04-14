@@ -1,20 +1,25 @@
-import React, { useState } from "react";
+import React from "react";
 import { 
   ShieldAlert, FileCheck, History, CheckCircle2, 
   ExternalLink, Loader2, AlertCircle
 } from "lucide-react";
 
-// API & Redux
-import { useGetLandsQuery, useVerifyLandMutation, type Land } from "../../features/lands/landApi";
-import { useBlockchain } from "../../features/blockchain/useBlockchain";
+// API & Redux - Removed "type Land" to fix unused var error
+import { useGetLandsQuery, useVerifyLandMutation } from "../../features/lands/landApi";
+
+// Defined a local interface for the Error for type-safety
+interface RTKError {
+  data?: {
+    error?: string;
+  };
+  message?: string;
+}
 
 const OfficerDashboard: React.FC = () => {
   const { data: allLands, isLoading, isError } = useGetLandsQuery();
-  const [verifyLand, { isLoading: isBackendUpdating }] = useVerifyLandMutation();
-  const { getContract, connectWallet } = useBlockchain();
-
-  // Local state for UI feedback
-  const [isMinting, setIsMinting] = useState(false);
+  
+  // verifyLand now triggers the backend to talk to the blockchain
+  const [verifyLand, { isLoading: isVerifying }] = useVerifyLandMutation();
 
   // Filter logic: Get only 'pending' lands for the queue
   const pendingLands = allLands?.filter(land => land.verificationStatus === 'pending') || [];
@@ -23,48 +28,25 @@ const OfficerDashboard: React.FC = () => {
   const verifiedCount = allLands?.filter(l => l.verificationStatus === 'verified').length || 0;
   const dailyTarget = 20;
 
-  const handleApproveAndMint = async (land: Land) => {
-    setIsMinting(true);
+  const handleApproveAndMint = async (landId: number, lrNumber: string) => {
     try {
-      // 1. Blockchain Handshake
-      await connectWallet();
-      const contract = await getContract();
+      console.log(`Requesting Backend to Digitalize Land: ${lrNumber}`);
 
-      console.log(`Digitalizing Land: ${land.lrNumber}`);
-
-      // 2. Smart Contract Call: registerLand(ownerAddress, lrNumber, ipfsHash)
-      // Note: Ensure your backend 'getLands' query includes the owner's walletAddress!
-      const transaction = await contract.registerLand(
-        (land as any).owner?.walletAddress, 
-        land.lrNumber,
-        land.ipfsDocHash || "N/A"
-      );
-
-      // 3. Wait for Transaction Receipt
-      const receipt = await transaction.wait();
-      
-      /** * 4. Extract onChainId from Event Logs
-       * Usually, your Smart Contract emits an event like 'LandRegistered(uint256 id, ...)'
-       * The ID is typically the first argument in the event logs.
+      /**
+       * FIXED: Your mutation expects an object with id and payload.
+       * Even if the payload is empty (because the backend generates it),
+       * the RTK Query definition requires this structure.
        */
-      const event = receipt.events?.find((e: any) => e.event === "LandRegistered");
-      const onChainId = event ? event.args.id.toNumber() : Math.floor(Math.random() * 100000);
-
-      // 5. Update Backend via RTK Query Mutation
-      await verifyLand({
-        id: land.id,
-        payload: {
-          onChainId,
-          status: "verified"
-        }
+      await verifyLand({ 
+        id: landId, 
+        payload: { status: "verified" } // Matches your VerifyLandPayload type
       }).unwrap();
 
-      alert(`Success! LR: ${land.lrNumber} is now a Verified Digital Asset.`);
-    } catch (err: any) {
-      console.error("Verification Error:", err);
-      alert(err.reason || "Blockchain minting failed. Check console.");
-    } finally {
-      setIsMinting(false);
+      alert(`Success! LR: ${lrNumber} is now officially verified on the Blockchain.`);
+    } catch (err) {
+      const error = err as RTKError;
+      console.error("Verification Error:", error);
+      alert(error.data?.error || "Blockchain minting failed. Check if Ganache is running.");
     }
   };
 
@@ -129,6 +111,7 @@ const OfficerDashboard: React.FC = () => {
                             <a 
                               href={`https://ipfs.io/ipfs/${land.ipfsDocHash}`} 
                               target="_blank" 
+                              rel="noreferrer"
                               className="text-[9px] text-blue-500 font-black flex items-center gap-1 mt-2 hover:underline uppercase"
                             >
                                 <ExternalLink size={10} /> View Deeds (IPFS)
@@ -137,14 +120,23 @@ const OfficerDashboard: React.FC = () => {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <button className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Reject</button>
+                        <button type="button" className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 hover:text-red-500 transition-colors">Reject</button>
                         <button 
-                          disabled={isMinting || isBackendUpdating}
-                          onClick={() => handleApproveAndMint(land)}
+                          disabled={isVerifying}
+                          onClick={() => handleApproveAndMint(land.id, land.lrNumber)}
                           className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 font-black text-[10px] uppercase tracking-widest shadow-lg disabled:opacity-50"
                         >
-                          {isMinting || isBackendUpdating ? <Loader2 className="animate-spin" size={14} /> : <ShieldAlert size={14} />}
-                          {isMinting ? "MINTING..." : "Sign & Approve"}
+                          {isVerifying ? (
+                            <>
+                              <Loader2 className="animate-spin" size={14} />
+                              <span>PROCESSING...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldAlert size={14} />
+                              <span>Verify & Mint</span>
+                            </>
+                          )}
                         </button>
                     </div>
                   </div>

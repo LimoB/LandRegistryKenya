@@ -1,6 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import db from "../drizzle/db";
 import { transferRequests, lands, auditLogs } from "../drizzle/schema";
+import { transferLandOnChain } from "@/blockchain/landRegistry";
 
 /* ================================
    CREATE TRANSFER REQUEST
@@ -26,25 +27,70 @@ export const getTransferByIdService = async (id: number) => {
 /* ================================
    APPROVE & EXECUTE TRANSFER
 ================================ */
-export const approveTransferService = async (transferId: number, txHash: string, officerId: number) => {
-  return await db.transaction(async (tx) => {
-    // 1. Get the transfer details
-    const transfer = await tx.query.transferRequests.findFirst({
-      where: eq(transferRequests.id, transferId),
-    });
+export const approveTransferService = async (transferId: number, officerId: number) => {
+  // 1. Fetch full transfer details
+  const transfer = await getTransferByIdService(transferId);
+  
+  if (!transfer) throw new Error("Transfer request not found");
+  if (transfer.status !== "pending") throw new Error("Transfer is already processed");
 
-    if (!transfer) throw new Error("Transfer request not found");
+  /* ============================================================
+     TYPE GUARDS: Ensuring all Blockchain data is present
+     ============================================================ */
+  
+  // Check onChainId (number)
+  if (transfer.land.onChainId === null || transfer.land.onChainId === undefined) {
+    throw new Error("Validation Error: This land has not been minted on the blockchain.");
+  }
 
-    // 2. Update Transfer Request Status
-    await tx.update(transferRequests)
+  // Check Buyer Wallet Address (string)
+  if (!transfer.buyer.walletAddress) {
+    throw new Error("Validation Error: Buyer does not have a registered wallet address.");
+  }
+
+  // Check M-Pesa Receipt Code (string)
+  if (!transfer.mpesaReceiptCode) {
+    throw new Error("Validation Error: M-Pesa transaction reference is missing.");
+  }
+
+  // At this point, TypeScript "narrows" the types to strictly 'number' and 'string'
+  const validOnChainId: number = transfer.land.onChainId;
+  const validWallet: string = transfer.buyer.walletAddress;
+  const validMpesaRef: string = transfer.mpesaReceiptCode;
+
+  /* ============================================================
+     2. EXECUTE ON BLOCKCHAIN
+     ============================================================ */
+  let tx;
+  try {
+    console.log(`Initiating Blockchain Transfer for Land ID: ${validOnChainId}`);
+    
+    tx = await transferLandOnChain(
+      validOnChainId, 
+      validWallet, 
+      validMpesaRef
+    );
+    
+    console.log(`Blockchain Success! Hash: ${tx.hash}`);
+  } catch (error: any) {
+    // If the blockchain fails, we stop here. DB remains unchanged.
+    throw new Error(`Blockchain Transaction Failed: ${error.message}`);
+  }
+
+  /* ============================================================
+     3. DATABASE TRANSACTION (Only runs if Blockchain succeeded)
+     ============================================================ */
+  return await db.transaction(async (txDb) => {
+    // Update Transfer Request Status
+    await txDb.update(transferRequests)
       .set({ 
         status: "transferred", 
-        blockchainTxHash: txHash 
+        blockchainTxHash: tx.hash 
       })
       .where(eq(transferRequests.id, transferId));
 
-    // 3. Update the Land Owner in the database
-    await tx.update(lands)
+    // Update the Land Owner in the DB
+    await txDb.update(lands)
       .set({ 
         ownerId: transfer.buyerId,
         isForSale: false, 
@@ -52,15 +98,18 @@ export const approveTransferService = async (transferId: number, txHash: string,
       })
       .where(eq(lands.id, transfer.landId));
 
-    // 4. Create an Audit Log for the Government
-    await tx.insert(auditLogs).values({
-      action: `Ownership Transferred: Land ID ${transfer.landId} from User ${transfer.sellerId} to ${transfer.buyerId}`,
+    // Create Government Audit Log
+    await txDb.insert(auditLogs).values({
+      action: `Ownership Transferred: Land ID ${transfer.landId} approved by Officer ${officerId}`,
       performedBy: officerId,
       landId: transfer.landId,
-      blockchainTxHash: txHash
+      blockchainTxHash: tx.hash
     });
 
-    return { message: "Database updated and ownership transferred successfully", txHash };
+    return { 
+      message: "Transfer successful on-chain and database synchronized", 
+      txHash: tx.hash 
+    };
   });
 };
 
@@ -86,6 +135,45 @@ export const getPendingTransfersService = async () => {
         } 
       },
       seller: { columns: { fullName: true } }
+    },
+    orderBy: (tr, { desc }) => [desc(tr.createdAt)]
+  });
+};
+
+
+/* ================================
+   REJECT TRANSFER SERVICE
+================================ */
+export const rejectTransferService = async (transferId: number, officerId: number, reason: string) => {
+  return await db.transaction(async (tx) => {
+    // 1. Update status to rejected
+    const [updated] = await tx.update(transferRequests)
+      .set({ status: "rejected" })
+      .where(eq(transferRequests.id, transferId))
+      .returning();
+
+    if (!updated) throw new Error("Transfer request not found");
+
+    // 2. Log the rejection in Audit Logs
+    await tx.insert(auditLogs).values({
+      action: `Transfer Rejected: Land ID ${updated.landId}. Reason: ${reason || "No reason provided"}`,
+      performedBy: officerId,
+      landId: updated.landId,
+    });
+
+    return { message: "Transfer request rejected and logged." };
+  });
+};
+
+/* ================================
+   GET SELLER TRANSFERS SERVICE
+================================ */
+export const getSellerTransfersService = async (sellerId: number) => {
+  return await db.query.transferRequests.findMany({
+    where: eq(transferRequests.sellerId, sellerId),
+    with: {
+      land: true,
+      buyer: { columns: { fullName: true, idNumber: true } }
     },
     orderBy: (tr, { desc }) => [desc(tr.createdAt)]
   });
