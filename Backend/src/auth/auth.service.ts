@@ -1,5 +1,5 @@
 import { eq, or } from "drizzle-orm";
-import db  from "../drizzle/db";
+import db from "../drizzle/db";
 import { users } from "../drizzle/schema";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -12,12 +12,16 @@ export type SafeUser = Omit<UserSelect, "password">;
    REGISTER SERVICE
 ================================ */
 export const registerService = async (userData: any): Promise<SafeUser> => {
-  // 1. Check existence (Email or ID Number)
+  // 1. Check existence (Email, ID Number, or Wallet)
   const existingUser = await db.query.users.findFirst({
-    where: or(eq(users.email, userData.email), eq(users.idNumber, userData.idNumber)),
+    where: or(
+      eq(users.email, userData.email), 
+      eq(users.idNumber, userData.idNumber),
+      eq(users.walletAddress, userData.walletAddress)
+    ),
   });
 
-  if (existingUser) throw new Error("User with this email or ID Number already exists");
+  if (existingUser) throw new Error("User with this email, ID Number, or Wallet already exists");
 
   // 2. Hash password
   const salt = await bcrypt.genSalt(10);
@@ -27,6 +31,7 @@ export const registerService = async (userData: any): Promise<SafeUser> => {
   const [newUser] = await db.insert(users).values({
     ...userData,
     password: hashedPassword,
+    isVerified: false, // Ensure they start unverified
   }).returning();
 
   // 4. Safely remove password
@@ -49,17 +54,18 @@ export const loginService = async (email: string, passwordAttempt: string) => {
   const isMatch = await bcrypt.compare(passwordAttempt, user.password);
   if (!isMatch) throw new Error("Invalid email or password");
 
+  // 6. Verification Check
+  // We return the user even if not verified, 
+  // and let the controller decide if it blocks the login or not.
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET not configured");
 
-  // 6. Sign Token with walletAddress included!
-  // This satisfies the DecodedToken interface in bearAuth.ts
   const token = jwt.sign(
     { 
       userId: user.id, 
       email: user.email, 
       role: user.role,
-      walletAddress: user.walletAddress // ✅ CRITICAL: Added for Blockchain actions
+      walletAddress: user.walletAddress 
     },
     secret,
     { expiresIn: "1d" }

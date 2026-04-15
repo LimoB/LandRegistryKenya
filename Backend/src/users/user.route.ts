@@ -6,16 +6,47 @@ import {
   deleteUser,
   updateProfile,
 } from "./user.controller";
-import { authMiddleware, adminOnly, officerOnly } from "../middleware/bearAuth";
+// Using your new refined guards
+import { 
+  adminAuth, 
+  officerAuth, 
+  anyRoleAuth, 
+  officialAuth 
+} from "../middleware/bearAuth";
 
 export const userRouter: Router = Router();
-// Only Admins or Land Officers can see all citizens
-userRouter.get("/", authMiddleware, officerOnly, getUsers);
 
-// Profile management
-userRouter.put("/profile", authMiddleware, updateProfile);
+/**
+ * @route   GET /api/users
+ * @desc    Get all registered users/citizens
+ * @access  Private (Admin & Land Officers only)
+ */
+userRouter.get("/", officialAuth, getUsers);
 
-// Specific user management (Admin Only)
-userRouter.get("/:id", authMiddleware, officerOnly, getUserById);
-userRouter.put("/:id", authMiddleware, adminOnly, updateUser);
-userRouter.delete("/:id", authMiddleware, adminOnly, deleteUser);
+/**
+ * @route   PUT /api/users/profile
+ * @desc    Allows any logged-in user to update their own profile details
+ * @access  Private (Citizen, Officer, or Admin)
+ */
+userRouter.put("/profile", anyRoleAuth, updateProfile);
+
+/**
+ * @route   GET /api/users/:id
+ * @desc    Get details of a specific user
+ * @access  Private (Admin & Land Officers)
+ */
+userRouter.get("/:id", officialAuth, getUserById);
+
+/**
+ * @route   PUT /api/users/:id
+ * @desc    Admin manually updates user roles or status
+ * @access  Private (Admin Only)
+ */
+userRouter.put("/:id", adminAuth, updateUser);
+
+/**
+ * @route   DELETE /api/users/:id
+ * @desc    Admin deletes a user from the system
+ * @access  Private (Admin Only)
+ */
+userRouter.delete("/:id", adminAuth, deleteUser);

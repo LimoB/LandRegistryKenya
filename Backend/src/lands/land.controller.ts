@@ -5,37 +5,28 @@ import {
   verifyLandService 
 } from "./land.service";
 import { uploadToIPFS } from "../utils/ipfs";
-import { registerLandOnChain } from "../blockchain/landRegistry";
 
-export const getLands = async (req: Request, res: Response) => {
+export const getLands = async (_req: Request, res: Response) => {
   try {
     const data = await getAllLandsService();
     res.status(200).json(data);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Internal Server Error";
+    res.status(500).json({ error: msg });
   }
 };
 
-
 export const registerLand = async (req: Request, res: Response) => {
   try {
-    const ownerId = (req as any).user?.userId;
+    const ownerId = req.user?.userId; // Using the extended Express.Request
     const file = req.file;
 
-    if (!ownerId) {
-      return res.status(401).json({ error: "Unauthorized: User ID missing" });
-    }
+    if (!ownerId) return res.status(401).json({ error: "Unauthorized" });
+    if (!file) return res.status(400).json({ error: "Physical Title Deed (PDF) is required" });
 
-    if (!file) {
-      return res.status(400).json({ error: "Physical Title Deed (PDF) is required" });
-    }
-
-    // 1. Upload Document to IPFS (Still do this now so the Officer can view it)
-    console.log(`📡 Uploading deed for ${req.body.lrNumber} to IPFS...`);
+    console.log(`📡 Uploading deed to IPFS...`);
     const ipfsHash = await uploadToIPFS(file.buffer, `TITLE_${req.body.lrNumber}.pdf`);
 
-    // 2. Save to Database with "pending" status
-    // The blockchain call is SKIPPED here and moved to verifyLand
     const land = await createLandService({ 
       ...req.body, 
       ownerId, 
@@ -44,35 +35,27 @@ export const registerLand = async (req: Request, res: Response) => {
     });
 
     res.status(201).json({ 
-      message: "Application submitted successfully. Awaiting Officer verification.", 
+      message: "Application submitted. Awaiting verification.", 
       land,
       ipfsLink: `https://gateway.pinata.cloud/ipfs/${ipfsHash}`
     });
-
-  } catch (error: any) {
-    console.error("Registration Error:", error);
-    res.status(400).json({ error: error.message });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Registration Error";
+    res.status(400).json({ error: msg });
   }
 };
 
-/* ================================
-   OFFICER: Verify & Mint to Blockchain
-================================ */
 export const verifyLand = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const officerId = (req as any).user?.userId;
+    const officerId = req.user?.userId;
 
-    if (!officerId) {
-      return res.status(401).json({ error: "Unauthorized: Officer ID missing" });
-    }
+    if (!officerId) return res.status(401).json({ error: "Unauthorized" });
 
-    // This service handles the Blockchain Minting + DB Update
     const result = await verifyLandService(Number(id), officerId);
-    
     res.status(200).json(result);
-  } catch (error: any) {
-    console.error("Verification Error:", error);
-    res.status(500).json({ error: error.message });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "Verification Error";
+    res.status(500).json({ error: msg });
   }
 };
