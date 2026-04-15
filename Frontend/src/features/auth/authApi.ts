@@ -4,11 +4,13 @@ import { setCredentials } from "../../app/slices/authSlice";
 /* ================================
    TYPES
 ================================ */
+export type UserRole = "admin" | "land_officer" | "citizen";
+
 export interface User {
   id: number;
   fullName: string;
   email: string;
-  role: "admin" | "land_officer" | "citizen";
+  role: UserRole;
   walletAddress: string;
 }
 
@@ -24,7 +26,7 @@ export interface RegisterPayload {
   idNumber: string;
   walletAddress: string;
   password: string;
-  role: "admin" | "land_officer" | "citizen";
+  role: UserRole;
 }
 
 export interface LoginPayload {
@@ -45,17 +47,13 @@ export const authApi = baseApi.injectEndpoints({
         method: "POST",
         body: data,
       }),
-
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
-          // Dispatches the typed AuthResponse to your auth slice
           dispatch(setCredentials(data));
-        } catch (err: unknown) {
-          // Avoiding 'any' here as well
-          if (err && typeof err === 'object' && 'error' in err) {
-             console.error("Login failed:", err);
-          }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (err) {
+          // Errors are handled in the UI component or via global error middleware
         }
       },
     }),
@@ -69,7 +67,42 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // 👤 PROFILE
+    // ✅ NEW: VERIFY EMAIL (Used on the /verify-email page)
+    verifyEmail: builder.query<{ message: string }, string>({
+      query: (token) => ({
+        url: `/auth/verify-email?token=${token}`,
+        method: "GET",
+      }),
+    }),
+
+    // ✅ NEW: RESEND VERIFICATION
+    resendVerification: builder.mutation<{ message: string }, { email: string }>({
+      query: (data) => ({
+        url: "/auth/resend-verification",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // ✅ NEW: FORGOT PASSWORD
+    forgotPassword: builder.mutation<{ message: string }, { email: string }>({
+      query: (data) => ({
+        url: "/auth/forgot-password",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // ✅ NEW: RESET PASSWORD
+    resetPassword: builder.mutation<{ message: string }, { token: string; newPassword: string }>({
+      query: (data) => ({
+        url: "/auth/reset-password",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // 👤 PROFILE (Optional check for auth status)
     getProfile: builder.query<AuthResponse, void>({
       query: () => "/auth/me",
     }),
@@ -79,5 +112,9 @@ export const authApi = baseApi.injectEndpoints({
 export const {
   useLoginMutation,
   useRegisterMutation,
+  useVerifyEmailQuery, // Lazy query or standard query for the verification page
+  useResendVerificationMutation,
+  useForgotPasswordMutation,
+  useResetPasswordMutation,
   useGetProfileQuery,
 } = authApi;

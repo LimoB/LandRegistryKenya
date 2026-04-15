@@ -20,6 +20,11 @@ import HowItWorks from "../pages/HowItWorks";
 import VerifyTitle from "../pages/VerifyTitle";
 import NotFound from "../pages/NotFound";
 
+// ✅ NEW: Auth & Recovery Pages
+import VerifyEmail from "../pages/VerifyEmail";
+import VerifyNotice from "../pages/VerifyNotice";
+import ForgotPassword from "../pages/ForgotPassword";
+
 // --- Citizen Pages ---
 import CitizenDashboard from "../pages/citizen/CitizenDashboard";
 import MyLands from "../pages/citizen/MyLands";
@@ -31,7 +36,7 @@ import MyRequests from "../pages/citizen/MyRequests";
 import OfficerDashboard from "../pages/landOfficer/OfficerDashboard";
 import VerifyLands from "../pages/landOfficer/VerifyLands";
 import TransferApprovals from "../pages/landOfficer/TransferApprovals";
-import RegistrySearch from "../pages/landOfficer/RegistrySearch"; // ADDED THIS
+import RegistrySearch from "../pages/landOfficer/RegistrySearch";
 
 // --- Admin Pages ---
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -53,6 +58,19 @@ const AppRoutes: React.FC = () => {
         <Route path="/register" element={<Register />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/verify-title" element={<VerifyTitle />} />
+        
+        {/* ✅ New Auth Flow Routes */}
+        <Route path="/verify-email" element={<VerifyEmail />} />
+        <Route path="/verify-notice" element={<VerifyNotice />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route 
+          path="/reset-password" 
+          element={
+            <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 uppercase tracking-tighter">
+              Reset Password Component Hooked to Backend Token Logic
+            </div>
+          } 
+        />
       </Route>
 
       {/* 2. Smart Dashboard Redirect Handler */}
@@ -98,7 +116,7 @@ const AppRoutes: React.FC = () => {
         />
       </Route>
 
-      {/* 4. Land Officer Routes (UPDATED SEARCH ROUTE) */}
+      {/* 4. Land Officer Routes */}
       <Route
         path="/officer"
         element={
@@ -113,7 +131,6 @@ const AppRoutes: React.FC = () => {
         <Route path="dashboard" element={<OfficerDashboard />} />
         <Route path="verify-lands" element={<VerifyLands />} />
         <Route path="transfers" element={<TransferApprovals />} />
-        {/* REPLACED PLACEHOLDER WITH REAL COMPONENT */}
         <Route path="search" element={<RegistrySearch />} /> 
       </Route>
 

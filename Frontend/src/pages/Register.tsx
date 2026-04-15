@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useRegisterMutation } from "../features/auth/authApi";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
+import { ethers } from "ethers";
 
 // Icons
 import { 
@@ -15,8 +16,8 @@ import {
   CheckCircle2,
   Loader2,
   FileDigit,
-  ShieldAlert,
-  ChevronDown
+  Info,
+  RefreshCw
 } from "lucide-react";
 
 // --- Types & Interfaces ---
@@ -29,6 +30,7 @@ interface InputFieldProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isMono?: boolean;
+  rightElement?: React.ReactNode;
 }
 
 interface ApiError {
@@ -45,13 +47,35 @@ const Register: React.FC = () => {
     idNumber: "",
     walletAddress: "",
     password: "",
-    role: "citizen" as "admin" | "land_officer" | "citizen",
+    role: "citizen" as const, 
   });
   
   const [register, { isLoading }] = useRegisterMutation();
   const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFetchWallet = async () => {
+    if (!window.ethereum) {
+      toast.error("Please install MetaMask to continue.");
+      return;
+    }
+
+    const syncToast = toast.loading("Connecting to your wallet...");
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      
+      if (accounts.length > 0) {
+        setForm(prev => ({ ...prev, walletAddress: accounts[0] }));
+        toast.success("Wallet connected!", { id: syncToast });
+      }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_err) {
+      // Prefixed with underscore to satisfy ESLint
+      toast.error("Failed to connect wallet.", { id: syncToast });
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -63,43 +87,40 @@ const Register: React.FC = () => {
     e.preventDefault();
     
     if (!validateWallet(form.walletAddress)) {
-      toast.error("Invalid Wallet: Address must start with 0x...");
+      toast.error("Please enter a valid wallet address (starting with 0x).");
       return;
     }
 
-    const loadingToast = toast.loading("Syncing with Ledger Node...");
+    const loadingToast = toast.loading("Creating your account...");
 
     try {
       await register(form).unwrap();
-      toast.success("Identity Provisioned!", { id: loadingToast });
+      toast.success("Account created successfully!", { id: loadingToast });
       navigate("/login");
     } catch (err: unknown) {
       const error = err as ApiError;
-      const msg = error.data?.message || error.message || "Registration rejected.";
+      const msg = error.data?.message || error.message || "Something went wrong.";
       toast.error(msg, { id: loadingToast });
     }
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-[#fafafa] dark:bg-slate-950 font-sans selection:bg-blue-100 selection:text-blue-900">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-[#fafafa] dark:bg-slate-950 font-sans">
       
-      {/* --- Left Side: Soft UI Form --- */}
+      {/* --- Left Side: Form --- */}
       <div className="flex items-center justify-center p-6 md:p-12 lg:p-20 relative overflow-hidden">
-        {/* Soft Ambient Glows */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-100/50 dark:bg-blue-900/10 blur-[120px] rounded-full pointer-events-none" />
-        
-        <div className="w-full max-w-xl space-y-10 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        <div className="w-full max-w-xl space-y-10 relative z-10">
           
-          <header className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-950/30 border border-blue-100/50 dark:border-blue-800/50 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-blue-600">
-              <Shield size={12} strokeWidth={3} />
-              Identity Provisioning
+          <header className="space-y-4 text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-950/30 border border-blue-100 rounded-full text-[10px] font-bold uppercase tracking-wider text-blue-600">
+              <Shield size={12} />
+              Secure Registration
             </div>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-white">
-              Create <span className="text-blue-600 drop-shadow-sm">Identity.</span>
+            <h2 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
+              Join the <span className="text-blue-600">Registry.</span>
             </h2>
-            <p className="text-[12px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-[0.1em]">
-              Authorized Node Access • National Land Registry
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+              Register your account to manage your land titles securely on the blockchain.
             </p>
           </header>
 
@@ -108,7 +129,7 @@ const Register: React.FC = () => {
               <InputField 
                 icon={<User size={18} />} 
                 name="fullName" 
-                placeholder="Full Legal Name" 
+                placeholder="Full Name (as on ID)" 
                 value={form.fullName} 
                 onChange={handleChange} 
               />
@@ -117,49 +138,44 @@ const Register: React.FC = () => {
                 icon={<Mail size={18} />} 
                 type="email"
                 name="email" 
-                placeholder="Official Email" 
+                placeholder="Email Address" 
                 value={form.email} 
                 onChange={handleChange} 
               />
+            </div>
 
-              <InputField 
+            <InputField 
                 icon={<FileDigit size={18} />} 
                 name="idNumber" 
-                placeholder="ID / Passport No." 
+                placeholder="ID or Passport Number" 
                 value={form.idNumber} 
                 onChange={handleChange} 
-              />
-
-              {/* Role Selector */}
-              <div className="relative group">
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  className="w-full px-5 py-4 bg-white dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800 rounded-3xl text-[11px] font-bold uppercase tracking-widest outline-none focus:ring-4 ring-blue-500/5 transition-all dark:text-white appearance-none cursor-pointer shadow-sm group-hover:border-blue-400/50"
-                >
-                  <option value="citizen">Citizen</option>
-                  <option value="land_officer">Land Officer</option>
-                  <option value="admin">Administrator</option>
-                </select>
-                <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-blue-500 transition-colors" />
-              </div>
-            </div>
+            />
 
             <InputField 
                 icon={<Wallet size={18} />} 
                 name="walletAddress" 
-                placeholder="Blockchain Wallet Address (0x...)" 
+                placeholder="Wallet Address (0x...)" 
                 value={form.walletAddress} 
                 onChange={handleChange} 
                 isMono
+                rightElement={
+                  <button 
+                    type="button" 
+                    onClick={handleFetchWallet}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
+                    title="Get from MetaMask"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                }
             />
 
             <InputField 
                 icon={<Lock size={18} />} 
                 type="password"
                 name="password" 
-                placeholder="Master Access Key" 
+                placeholder="Create a Strong Password" 
                 value={form.password} 
                 onChange={handleChange} 
             />
@@ -167,62 +183,62 @@ const Register: React.FC = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full bg-slate-900 dark:bg-blue-600 text-white py-4.5 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-blue-900/10 hover:shadow-blue-600/30 hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-70 group mt-8 h-14"
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-70 group mt-8 h-14"
             >
               {isLoading ? (
                 <Loader2 size={20} className="animate-spin" />
               ) : (
                 <>
-                  Verify & Register
+                  Create My Account
                   <ArrowRight size={18} className="group-hover:translate-x-2 transition-transform" />
                 </>
               )}
             </button>
           </form>
 
-          <footer className="pt-10 border-t border-slate-100 dark:border-slate-900/50 flex flex-col items-center gap-2">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Already have an ID?
-            </p>
-            <Link to="/login" className="text-blue-600 hover:text-blue-500 transition-all font-black text-xs uppercase tracking-widest hover:tracking-[0.2em]">
-              Return to Portal
+          <footer className="pt-10 border-t border-slate-100 dark:border-slate-800 flex flex-col items-center gap-2">
+            <p className="text-xs text-slate-500">Already have an account?</p>
+            <Link to="/login" className="text-blue-600 hover:underline font-bold text-sm">
+              Log in here
             </Link>
           </footer>
         </div>
       </div>
 
-      {/* --- Right Side: The Visual Panel --- */}
-      <section className="hidden lg:flex bg-blue-600 items-center justify-center relative overflow-hidden m-4 rounded-[3rem] shadow-2xl">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700">
-            <div className="absolute top-0 -right-20 w-[500px] h-[500px] bg-blue-400/20 blur-[100px] rounded-full animate-pulse" />
-            <div className="absolute bottom-0 -left-20 w-[500px] h-[500px] bg-indigo-900/30 blur-[100px] rounded-full" />
-        </div>
-        
-        <div className="relative z-10 p-16 text-white space-y-12 max-w-xl text-center lg:text-left">
-          <div className="inline-flex p-1 bg-white/10 backdrop-blur-2xl rounded-[3rem] border border-white/20 shadow-2xl">
-             <div className="p-7 bg-white/10 rounded-[2.8rem]">
-                <Fingerprint size={64} strokeWidth={1} className="text-blue-50" />
-             </div>
+      {/* --- Right Side: Info Panel --- */}
+      <section className="hidden lg:flex bg-blue-600 items-center justify-center relative m-4 rounded-[3rem] shadow-2xl overflow-hidden">
+        <div className="relative z-10 p-16 text-white space-y-8 max-w-xl">
+          <div className="w-20 h-20 bg-white/10 backdrop-blur-xl rounded-3xl flex items-center justify-center border border-white/20">
+            <Fingerprint size={48} strokeWidth={1.5} />
           </div>
           
-          <div className="space-y-8">
-            <h3 className="text-5xl font-black tracking-tighter uppercase leading-[0.85] italic drop-shadow-lg">
-              Immutable <br /> <span className="text-blue-200">Ownership.</span>
+          <div className="space-y-6">
+            <h3 className="text-4xl font-bold leading-tight">
+              Simple. Secure. <br /> Permanent.
             </h3>
             
             <div className="space-y-4">
-               <InfoItem icon={<CheckCircle2 size={16} />} text="Cryptographic Identity Proof" />
-               <InfoItem icon={<ShieldAlert size={16} />} text="Non-Custodial Asset Wallet" />
-               <InfoItem icon={<Lock size={16} />} text="Multi-Sig Protocol Support" />
+               <div className="flex items-center gap-4 text-sm font-medium">
+                  <CheckCircle2 size={20} className="text-blue-200" />
+                  Your identity is verified and protected
+               </div>
+               <div className="flex items-center gap-4 text-sm font-medium">
+                  <CheckCircle2 size={20} className="text-blue-200" />
+                  You own your land records via your wallet
+               </div>
+               <div className="flex items-center gap-4 text-sm font-medium">
+                  <CheckCircle2 size={20} className="text-blue-200" />
+                  Fast, digital, and paperless process
+               </div>
             </div>
 
-            <div className="p-8 bg-blue-950/30 rounded-[2.5rem] border border-white/5 backdrop-blur-xl mt-12 transition-all hover:bg-blue-950/40">
-                <p className="text-[11px] font-bold text-blue-100/80 uppercase tracking-widest leading-loose">
-                    <span className="text-white font-black block mb-2 text-xs">Registry Node Protocol:</span>
-                    Data entries are permanent. Your wallet address acts as your 
-                    <span className="text-white"> Sovereign Key</span>. Ensure accuracy before 
-                    broadcasting to the mainnet.
-                </p>
+            <div className="p-6 bg-blue-700/50 rounded-3xl border border-white/10 mt-8">
+                <div className="flex gap-3 items-start">
+                    <Info size={20} className="shrink-0 mt-0.5" />
+                    <p className="text-sm leading-relaxed">
+                        <strong>Quick Tip:</strong> Your wallet address is like your digital signature. Make sure it's correct before you sign up!
+                    </p>
+                </div>
             </div>
           </div>
         </div>
@@ -231,11 +247,11 @@ const Register: React.FC = () => {
   );
 };
 
-// --- Reusable Sub-Components ---
+// --- Reusable Input Component ---
 
-const InputField: React.FC<InputFieldProps> = ({ icon, type = "text", name, placeholder, value, onChange, isMono = false }) => (
-  <div className="relative group">
-    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none">
+const InputField: React.FC<InputFieldProps> = ({ icon, type = "text", name, placeholder, value, onChange, isMono = false, rightElement }) => (
+  <div className="relative group w-full">
+    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none z-20">
         {icon}
     </div>
     <input 
@@ -244,17 +260,11 @@ const InputField: React.FC<InputFieldProps> = ({ icon, type = "text", name, plac
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`w-full pl-14 pr-6 py-4 bg-white dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800 rounded-3xl text-[13px] font-bold outline-none focus:ring-4 ring-blue-500/5 focus:border-blue-500/50 transition-all dark:text-white shadow-sm placeholder:text-slate-400/80 group-hover:border-blue-400/30 ${isMono ? 'font-mono text-xs' : ''}`}
+      className={`w-full pl-14 pr-12 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white ${isMono ? 'font-mono text-xs' : ''}`}
       required
     />
+    {rightElement}
   </div>
-);
-
-const InfoItem: React.FC<{ icon: React.ReactNode, text: string }> = ({ icon, text }) => (
-    <div className="flex items-center gap-4 text-white font-black text-[12px] uppercase tracking-[0.2em] group cursor-default">
-        <span className="bg-white/10 p-2.5 rounded-2xl border border-white/10 shadow-lg group-hover:scale-110 transition-transform">{icon}</span>
-        {text}
-    </div>
 );
 
 export default Register;
