@@ -5,7 +5,10 @@ import app from "./app";
 import db from "./drizzle/db";
 import { sql } from "drizzle-orm";
 
-// 🔥 IMPORT BLOCKCHAIN LISTENER
+// IMPORT LOGGER
+import logger from "./middleware/logger";
+
+// IMPORT BLOCKCHAIN LISTENER
 import { startBlockchainListener } from "./blockchain/eventListener";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
@@ -15,7 +18,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 ============================================================ */
 async function startServer() {
   try {
-    console.log("🚀 Starting Kenyan Land Registry Server...");
+    logger.info("Starting Kenyan Land Registry Server...");
 
     // -----------------------------
     // ENV CHECKS (fail fast)
@@ -25,7 +28,9 @@ async function startServer() {
     }
 
     if (!process.env.BLOCKCHAIN_RPC_URL) {
-      console.warn("⚠️ BLOCKCHAIN_RPC_URL not set, using default Ganache");
+      logger.warn(
+        "BLOCKCHAIN_RPC_URL not set, using default Ganache"
+      );
     }
 
     if (!process.env.LAND_REGISTRY_ADDRESS) {
@@ -35,28 +40,37 @@ async function startServer() {
     // -----------------------------
     // DATABASE CONNECTION TEST
     // -----------------------------
-    console.log("🔌 Connecting to database...");
+    logger.info("Connecting to database...");
+
     await db.execute(sql`SELECT 1`);
-    console.log("Database connected successfully");
+
+    logger.info("Database connected successfully");
 
     // -----------------------------
     // START BLOCKCHAIN LISTENER
     // -----------------------------
-    console.log("⛓️ Starting blockchain sync layer...");
+    logger.info("Starting blockchain sync layer...");
+
     startBlockchainListener();
-    console.log("Blockchain listener active");
+
+    logger.info("Blockchain listener active");
 
     // -----------------------------
     // START EXPRESS SERVER
     // -----------------------------
     app.listen(PORT, () => {
-      console.log(`🌍 Server running at http://localhost:${PORT}`);
-      console.log("API ready for requests");
+      logger.info(`Server running at http://localhost:${PORT}`);
+      logger.info("API ready for requests");
     });
 
   } catch (error) {
-    console.error("Server failed to start:");
-    console.error(error);
+    logger.error(
+      {
+        err: error,
+      },
+      "Server failed to start"
+    );
+
     process.exit(1);
   }
 }
@@ -67,9 +81,9 @@ async function startServer() {
 startServer();
 
 /* ============================================================
-   GRACEFUL SHUTDOWN (IMPORTANT FOR BLOCKCHAIN LISTENERS)
+   GRACEFUL SHUTDOWN
 ============================================================ */
 process.on("SIGINT", () => {
-  console.log("\n Shutting down server...");
+  logger.info("Shutting down server...");
   process.exit(0);
 });

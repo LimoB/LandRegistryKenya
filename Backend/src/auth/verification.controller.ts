@@ -4,21 +4,28 @@ import { users, verificationTokens } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
 /* ============================================================
-   VERIFY EMAIL CONTROLLER (TOKEN SAFE + PRODUCTION READY)
+   VERIFY EMAIL CONTROLLER (OTP + TOKEN SAFE)
 ============================================================ */
-export const verifyEmailController = async (req: Request, res: Response): Promise<void> => {
+export const verifyEmailController = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     // ============================================================
-    // 1. TOKEN NORMALIZATION (IMPORTANT FIX)
+    // 1. READ TOKEN (QUERY OR BODY SUPPORT)
     // ============================================================
     let { token } = req.query;
 
     if (!token) {
-      res.status(400).json({ error: "Verification token is required" });
+      token = req.body?.token;
+    }
+
+    if (!token) {
+      res.status(400).json({ error: "Verification code is required" });
       return;
     }
 
-    // Handle string | string[]
+    // normalize token
     if (Array.isArray(token)) {
       token = token[0];
     }
@@ -26,7 +33,7 @@ export const verifyEmailController = async (req: Request, res: Response): Promis
     token = String(token).trim();
 
     // ============================================================
-    // 2. FIND TOKEN
+    // 2. FIND VERIFICATION TOKEN
     // ============================================================
     const storedToken = await db.query.verificationTokens.findFirst({
       where: and(
@@ -37,27 +44,28 @@ export const verifyEmailController = async (req: Request, res: Response): Promis
 
     if (!storedToken) {
       res.status(400).json({
-        error: "Invalid or already used verification token"
+        error: "Invalid or expired verification code"
       });
       return;
     }
 
     // ============================================================
-    // 3. EXPIRY CHECK
+    // 3. CHECK EXPIRY
     // ============================================================
     if (storedToken.expiresAt < new Date()) {
-      // Clean expired token immediately
-      await db.delete(verificationTokens)
-        .where(eq(verificationTokens.id, storedToken.id));
+      // cleanup expired token
+      await db.delete(verificationTokens).where(
+        eq(verificationTokens.id, storedToken.id)
+      );
 
       res.status(400).json({
-        error: "Verification token expired. Please request a new one."
+        error: "Verification code expired. Request a new one."
       });
       return;
     }
 
     // ============================================================
-    // 4. FETCH USER
+    // 4. GET USER
     // ============================================================
     const user = await db.query.users.findFirst({
       where: eq(users.id, storedToken.userId),
@@ -65,46 +73,47 @@ export const verifyEmailController = async (req: Request, res: Response): Promis
 
     if (!user) {
       res.status(404).json({
-        error: "User not found for this token"
+        error: "User not found for this verification code"
       });
       return;
     }
 
     // ============================================================
-    // 5. IDENTITY CHECK (IDEMPOTENT SAFETY)
+    // 5. ALREADY VERIFIED CHECK (IDEMPOTENT)
     // ============================================================
     if (user.isVerified) {
-      // Clean token anyway
-      await db.delete(verificationTokens)
-        .where(eq(verificationTokens.id, storedToken.id));
+      await db.delete(verificationTokens).where(
+        eq(verificationTokens.id, storedToken.id)
+      );
 
       res.status(200).json({
-        message: "Account already verified. You can log in."
+        message: "Account already verified. Please log in."
       });
       return;
     }
 
     // ============================================================
-    // 6. VERIFY USER
+    // 6. UPDATE USER STATUS
     // ============================================================
     await db.update(users)
       .set({
         isVerified: true,
         emailVerifiedAt: new Date()
       })
-      .where(eq(users.id, storedToken.userId));
+      .where(eq(users.id, user.id));
 
     // ============================================================
-    // 7. CLEANUP TOKEN (ONE-TIME USE)
+    // 7. DELETE TOKEN (ONE-TIME USE)
     // ============================================================
-    await db.delete(verificationTokens)
-      .where(eq(verificationTokens.id, storedToken.id));
+    await db.delete(verificationTokens).where(
+      eq(verificationTokens.id, storedToken.id)
+    );
 
     // ============================================================
-    // 8. SUCCESS RESPONSE
+    // 8. RESPONSE
     // ============================================================
     res.status(200).json({
-      message: "Email verified successfully. You can now access the Land Registry system."
+      message: "Email verified successfully. Welcome to Land Registry."
     });
 
   } catch (error) {

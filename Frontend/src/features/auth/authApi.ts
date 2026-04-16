@@ -1,9 +1,9 @@
 import { baseApi } from "../../app/api/baseApi";
 import { setCredentials } from "../../app/slices/authSlice";
 
-/* ================================
+/* ============================================================
    TYPES
-================================ */
+============================================================ */
 export type UserRole = "admin" | "land_officer" | "citizen";
 
 export interface User {
@@ -21,6 +21,9 @@ export interface AuthResponse {
   user: User;
 }
 
+/* ============================================================
+   AUTH PAYLOADS
+============================================================ */
 export interface RegisterPayload {
   fullName: string;
   email: string;
@@ -35,9 +38,26 @@ export interface LoginPayload {
   password: string;
 }
 
-/* ================================
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string; // OTP CODE (6 digits)
+  newPassword: string;
+}
+
+export interface VerifyEmailPayload {
+  token: string; // OTP CODE (6 digits)
+}
+
+export interface ResendVerificationPayload {
+  email: string;
+}
+
+/* ============================================================
    AUTH API
-================================ */
+============================================================ */
 export const authApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
@@ -75,13 +95,13 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       VERIFY EMAIL (IMPORTANT FIX)
-       - backend uses GET /auth/verify-email?token=
+       VERIFY EMAIL (OTP VERSION)
     ====================== */
-    verifyEmail: builder.mutation<{ message: string }, string>({
-      query: (token) => ({
-        url: `/auth/verify-email?token=${token}`,
-        method: "GET",
+    verifyEmail: builder.mutation<{ message: string }, VerifyEmailPayload>({
+      query: (data) => ({
+        url: "/auth/verify-email",
+        method: "POST", // IMPORTANT: OTP uses POST body, not GET link
+        body: data,
       }),
     }),
 
@@ -90,7 +110,7 @@ export const authApi = baseApi.injectEndpoints({
     ====================== */
     resendVerification: builder.mutation<
       { message: string },
-      { email: string }
+      ResendVerificationPayload
     >({
       query: (data) => ({
         url: "/auth/resend-verification",
@@ -100,11 +120,11 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       FORGOT PASSWORD
+       FORGOT PASSWORD (OTP)
     ====================== */
     forgotPassword: builder.mutation<
       { message: string },
-      { email: string }
+      ForgotPasswordPayload
     >({
       query: (data) => ({
         url: "/auth/forgot-password",
@@ -114,11 +134,11 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       RESET PASSWORD
+       RESET PASSWORD (OTP VERIFY)
     ====================== */
     resetPassword: builder.mutation<
       { message: string },
-      { token: string; newPassword: string }
+      ResetPasswordPayload
     >({
       query: (data) => ({
         url: "/auth/reset-password",
@@ -129,9 +149,9 @@ export const authApi = baseApi.injectEndpoints({
   }),
 });
 
-/* ================================
+/* ============================================================
    EXPORT HOOKS
-================================ */
+============================================================ */
 export const {
   useLoginMutation,
   useRegisterMutation,

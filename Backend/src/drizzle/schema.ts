@@ -124,11 +124,17 @@ export const verificationTokens = pgTable("verification_tokens", {
     .references(() => users.id, { onDelete: "cascade" })
     .notNull(),
 
-  token: text("token").notNull(),
+  token: varchar("token", { length: 10 }).notNull(), //  CHANGE HERE
+
   type: tokenTypeEnum("type").notNull(),
 
   expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow()
+
+  createdAt: timestamp("created_at").defaultNow(),
+
+  //  NEW (optional but powerful)
+  attempts: integer("attempts").default(0),
+  used: boolean("used").default(false),
 });
 
 /* ================= LANDS ================= */

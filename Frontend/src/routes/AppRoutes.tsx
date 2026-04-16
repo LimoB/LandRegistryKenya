@@ -45,6 +45,7 @@ import GlobalRegistry from "../pages/admin/GlobalRegistry";
 import LandsManagement from "../pages/admin/LandsManagement";
 import TransfersManagement from "../pages/admin/TransfersManagement";
 import AuditLogs from "../pages/admin/AuditLogs";
+import VerifyResetCode from "../pages/VerifyResetCode";
 
 const AppRoutes: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -63,6 +64,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/verify-notice" element={<VerifyNotice />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-reset-code" element={<VerifyResetCode />} />
         <Route 
           path="/reset-password" 
           element={
