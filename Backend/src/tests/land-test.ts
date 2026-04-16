@@ -1,6 +1,6 @@
 import { createLandService } from "../lands/land.service";
 import { uploadToIPFS } from "../utils/ipfs";
-import { registerLandOnChain } from "../blockchain/landRegistry";
+import { registerLandOnChain } from "../blockchain/blockchain.adapter";
 import db from "../drizzle/db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";

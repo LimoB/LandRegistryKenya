@@ -1,4 +1,4 @@
-import { registerLandOnChain, transferLandOnChain } from "./landRegistry";
+import { registerLandOnChain, transferLandOnChain } from "./blockchain.adapter";
 import { officerWallet, provider } from "./provider";
 import { ethers } from "ethers";
 

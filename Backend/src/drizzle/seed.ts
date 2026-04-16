@@ -14,25 +14,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function seed() {
-  console.log("🌱 Starting Kenyan Land Registry Seed...");
-
-  // ==========================================
-  // OPTIONAL CLEANUP (SAFE ORDER)
-  // ==========================================
-  // await db.delete(auditLogs);
-  // await db.delete(payments);
-  // await db.delete(transferRequests);
-  // await db.delete(landOwnershipHistory);
-  // await db.delete(lands);
-  // await db.delete(users);
+  console.log("Starting Kenyan Land Registry Seed...");
 
   const hashedPassword = await bcrypt.hash("password123", 10);
 
   try {
-    // ==========================================
-    // 1. USERS
-    // ==========================================
-    console.log("👤 Seeding Users...");
+    /* ============================
+       1. USERS
+    ============================ */
+    console.log("Seeding Users...");
 
     const insertedUsers = await db.insert(users).values([
       {
@@ -69,10 +59,10 @@ async function seed() {
 
     const [admin, citizen, officer] = insertedUsers;
 
-    // ==========================================
-    // 2. LANDS
-    // ==========================================
-    console.log("🏘️ Seeding Lands...");
+    /* ============================
+       2. LANDS
+    ============================ */
+    console.log("Seeding Lands...");
 
     const insertedLands = await db.insert(lands).values([
       {
@@ -86,6 +76,8 @@ async function seed() {
         verifiedBy: officer.id,
         verifiedAt: new Date(),
         onChainId: 1,
+        blockchainTxHash: "0xseedtx1",
+        network: "ganache",
         isForSale: true,
         priceInKsh: "2500000.00"
       },
@@ -100,6 +92,8 @@ async function seed() {
         verifiedBy: officer.id,
         verifiedAt: new Date(),
         onChainId: 2,
+        blockchainTxHash: "0xseedtx2",
+        network: "ganache",
         isForSale: false
       },
       {
@@ -117,86 +111,110 @@ async function seed() {
 
     const [land1, land2, land3] = insertedLands;
 
-    // ==========================================
-    // 3. OWNERSHIP HISTORY
-    // ==========================================
-    console.log("📜 Seeding Ownership History...");
+    /* ============================
+       3. OWNERSHIP HISTORY
+    ============================ */
+    console.log("Seeding Ownership History...");
 
     await db.insert(landOwnershipHistory).values([
       {
         landId: land1.id,
-        ownerId: citizen.id
+        fromOwnerId: citizen.id,
+        toOwnerId: citizen.id,
+        fromWallet: citizen.walletAddress,
+        toWallet: citizen.walletAddress,
+        mpesaRef: null,
+        blockchainTxHash: "0xhist1"
       },
       {
         landId: land2.id,
-        ownerId: officer.id
+        fromOwnerId: officer.id,
+        toOwnerId: officer.id,
+        fromWallet: officer.walletAddress,
+        toWallet: officer.walletAddress,
+        mpesaRef: null,
+        blockchainTxHash: "0xhist2"
       },
       {
         landId: land3.id,
-        ownerId: citizen.id
+        fromOwnerId: citizen.id,
+        toOwnerId: citizen.id,
+        fromWallet: citizen.walletAddress,
+        toWallet: citizen.walletAddress,
+        mpesaRef: null,
+        blockchainTxHash: "0xhist3"
       }
     ]);
 
-    // ==========================================
-    // 4. TRANSFER REQUESTS
-    // ==========================================
-    console.log("📝 Seeding Transfer Requests...");
+    /* ============================
+       4. TRANSFER REQUESTS
+    ============================ */
+    console.log("Seeding Transfer Requests...");
 
     const insertedTransfers = await db.insert(transferRequests).values([
       {
         landId: land1.id,
         sellerId: citizen.id,
         buyerId: officer.id,
-        status: "pending"
+        status: "pending",
+        blockchainStatus: "pending"
       },
       {
         landId: land2.id,
         sellerId: officer.id,
         buyerId: admin.id,
-        status: "approved"
+        status: "approved",
+        blockchainStatus: "submitted"
       },
       {
         landId: land1.id,
         sellerId: citizen.id,
         buyerId: admin.id,
-        status: "rejected"
+        status: "rejected",
+        blockchainStatus: "failed"
       }
     ]).returning();
 
     const [t1, t2, t3] = insertedTransfers;
 
-    // ==========================================
-    // 5. PAYMENTS
-    // ==========================================
-    console.log("💰 Seeding Payments...");
+    /* ============================
+       5. PAYMENTS
+    ============================ */
+    console.log("Seeding Payments...");
 
     await db.insert(payments).values([
       {
         transferRequestId: t2.id,
+        landId: land2.id,
+        operationType: "transfer",
         amount: "5000000.00",
         paymentMethod: "mpesa",
         paymentStatus: "completed",
-        mpesaReceiptCode: "SJK9876543"
+        mpesaReceiptCode: "SJK9876543",
+        confirmedAt: new Date(),
+        confirmedBy: "mpesa"
       }
     ]);
 
-    // ==========================================
-    // 6. AUDIT LOGS
-    // ==========================================
-    console.log("📊 Seeding Audit Logs...");
+    /* ============================
+       6. AUDIT LOGS
+    ============================ */
+    console.log("Seeding Audit Logs...");
 
     await db.insert(auditLogs).values([
       {
         actionType: "LAND_VERIFIED",
         performedBy: officer.id,
         landId: land1.id,
-        metadata: { note: "Land verified by officer" }
+        metadata: { note: "Land verified by officer" },
+        blockchainTxHash: "0xaudit1"
       },
       {
         actionType: "TRANSFER_APPROVED",
         performedBy: admin.id,
         landId: land2.id,
-        metadata: { transferId: t2.id }
+        metadata: { transferId: t2.id },
+        blockchainTxHash: "0xaudit2"
       },
       {
         actionType: "PAYMENT_COMPLETED",
@@ -205,15 +223,16 @@ async function seed() {
         metadata: {
           amount: 5000000,
           method: "mpesa"
-        }
+        },
+        blockchainTxHash: "0xaudit3"
       }
     ]);
 
-    console.log("✨ Seeding Complete!");
+    console.log("Seed Complete");
     process.exit(0);
 
   } catch (error) {
-    console.error("❌ Seeding failed:", error);
+    console.error("Seeding failed:", error);
     process.exit(1);
   }
 }

@@ -5,14 +5,13 @@ import {
   getPendingTransfersService,
   getSellerTransfersService,
   rejectTransferService,
-  recordPaymentService,
   finalizeTransferService,
   getTransferByIdService
 } from "./transfer.service";
 
-/* ================================
+/* ============================================================
    INITIATE TRANSFER (Buyer)
-================================ */
+============================================================ */
 export const initiateTransfer = async (req: Request, res: Response) => {
   try {
     const { landId } = req.body;
@@ -33,9 +32,9 @@ export const initiateTransfer = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    APPROVE TRANSFER (Officer)
-================================ */
+============================================================ */
 export const approveTransfer = async (req: Request, res: Response) => {
   try {
     const officerId = (req as any).user?.userId;
@@ -55,31 +54,9 @@ export const approveTransfer = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
-   RECORD PAYMENT (Buyer/Admin)
-================================ */
-export const recordPayment = async (req: Request, res: Response) => {
-  try {
-    const { mpesaCode, amount } = req.body;
-
-    const result = await recordPaymentService(
-      Number(req.params.id),
-      mpesaCode,
-      amount
-    );
-
-    res.status(200).json({
-      message: "Payment recorded successfully",
-      payment: result
-    });
-  } catch (error: any) {
-    res.status(400).json({ error: error.message });
-  }
-};
-
-/* ================================
-   FINALIZE TRANSFER (Officer)
-================================ */
+/* ============================================================
+   FINALIZE TRANSFER (Officer - Blockchain step)
+============================================================ */
 export const finalizeTransfer = async (req: Request, res: Response) => {
   try {
     const officerId = (req as any).user?.userId;
@@ -100,9 +77,9 @@ export const finalizeTransfer = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    REJECT TRANSFER (Officer)
-================================ */
+============================================================ */
 export const rejectTransfer = async (req: Request, res: Response) => {
   try {
     const officerId = (req as any).user?.userId;
@@ -125,9 +102,9 @@ export const rejectTransfer = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    GET PENDING TRANSFERS (Officer)
-================================ */
+============================================================ */
 export const getPending = async (_req: Request, res: Response) => {
   try {
     const data = await getPendingTransfersService();
@@ -137,9 +114,9 @@ export const getPending = async (_req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    GET MY SALES (Seller)
-================================ */
+============================================================ */
 export const getMySales = async (req: Request, res: Response) => {
   try {
     const sellerId = (req as any).user?.userId;
@@ -156,9 +133,9 @@ export const getMySales = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    GET TRANSFER BY ID
-================================ */
+============================================================ */
 export const getTransferById = async (req: Request, res: Response) => {
   try {
     const transfer = await getTransferByIdService(Number(req.params.id));

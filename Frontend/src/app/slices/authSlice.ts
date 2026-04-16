@@ -8,20 +8,27 @@ export interface User {
   email: string;
   role: UserRole;
   walletAddress: string;
+  isVerified?: boolean;
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
-  tempEmail: string | null; // Stores email for verification/resend flows
+
+  tempEmail: string | null;
+
+  isAuthenticated: boolean;
+  authHydrated: boolean;
 }
 
+/* ================================
+   SAFE LOCAL STORAGE LOAD
+================================ */
 const getInitialUser = (): User | null => {
   try {
-    const storedUser = localStorage.getItem("user");
-    return storedUser ? JSON.parse(storedUser) : null;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (error) {
+    const stored = localStorage.getItem("user");
+    return stored ? JSON.parse(stored) : null;
+  } catch {
     localStorage.removeItem("user");
     return null;
   }
@@ -29,60 +36,96 @@ const getInitialUser = (): User | null => {
 
 const initialState: AuthState = {
   user: getInitialUser(),
-  token: localStorage.getItem("token") || null,
+  token: localStorage.getItem("token"),
   tempEmail: null,
+
+  isAuthenticated: !!localStorage.getItem("token"),
+  authHydrated: false,
 };
 
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
-    /**
-     * Set credentials upon successful Login.
-     */
+    /* ======================
+       LOGIN SUCCESS
+    ====================== */
     setCredentials: (
       state,
-      action: PayloadAction<{
-        token: string;
-        user: User;
-      }>
+      action: PayloadAction<{ token: string; user: User }>
     ) => {
       const { user, token } = action.payload;
+
       state.user = user;
       state.token = token;
-      state.tempEmail = null; // Clear temp email on successful login
+      state.isAuthenticated = true;
+      state.tempEmail = null;
 
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
     },
 
-    /**
-     * Used for the "Verification Pending" state.
-     * Stores the email so the user can resend the code without re-typing.
-     */
+    /* ======================
+       EMAIL VERIFICATION FLOW
+    ====================== */
     setTempEmail: (state, action: PayloadAction<string>) => {
       state.tempEmail = action.payload;
     },
 
+    /* ======================
+       UPDATE USER (PROFILE)
+    ====================== */
+    updateUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
+      localStorage.setItem("user", JSON.stringify(action.payload));
+    },
+
+    /* ======================
+       LOGOUT
+    ====================== */
     logout: (state) => {
       state.user = null;
       state.token = null;
       state.tempEmail = null;
+      state.isAuthenticated = false;
+
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     },
 
-    updateUser: (state, action: PayloadAction<User>) => {
-      state.user = action.payload;
-      localStorage.setItem("user", JSON.stringify(action.payload));
-    }
+    /* ======================
+       HYDRATION COMPLETE
+    ====================== */
+    setAuthHydrated: (state) => {
+      state.authHydrated = true;
+    },
   },
 });
 
-export const { setCredentials, setTempEmail, logout, updateUser } = authSlice.actions;
+export const {
+  setCredentials,
+  setTempEmail,
+  updateUser,
+  logout,
+  setAuthHydrated,
+} = authSlice.actions;
 
-export const selectCurrentUser = (state: { auth: AuthState }) => state.auth.user;
-export const selectCurrentToken = (state: { auth: AuthState }) => state.auth.token;
-export const selectTempEmail = (state: { auth: AuthState }) => state.auth.tempEmail;
+/* ================================
+   SELECTORS
+================================ */
+export const selectCurrentUser = (state: { auth: AuthState }) =>
+  state.auth.user;
+
+export const selectCurrentToken = (state: { auth: AuthState }) =>
+  state.auth.token;
+
+export const selectTempEmail = (state: { auth: AuthState }) =>
+  state.auth.tempEmail;
+
+export const selectIsAuthenticated = (state: { auth: AuthState }) =>
+  state.auth.isAuthenticated;
+
+export const selectAuthHydrated = (state: { auth: AuthState }) =>
+  state.auth.authHydrated;
 
 export default authSlice.reducer;

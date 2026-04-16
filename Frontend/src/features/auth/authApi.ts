@@ -12,6 +12,7 @@ export interface User {
   email: string;
   role: UserRole;
   walletAddress: string;
+  isVerified?: boolean;
 }
 
 export interface AuthResponse {
@@ -39,8 +40,10 @@ export interface LoginPayload {
 ================================ */
 export const authApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    
-    // 🔐 LOGIN
+
+    /* ======================
+       LOGIN
+    ====================== */
     login: builder.mutation<AuthResponse, LoginPayload>({
       query: (data) => ({
         url: "/auth/login",
@@ -51,15 +54,19 @@ export const authApi = baseApi.injectEndpoints({
         try {
           const { data } = await queryFulfilled;
           dispatch(setCredentials(data));
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (err) {
-          // Errors are handled in the UI component or via global error middleware
+        } catch {
+          // handled in UI
         }
       },
     }),
 
-    // 📝 REGISTER
-    register: builder.mutation<{ message: string; user: User }, RegisterPayload>({
+    /* ======================
+       REGISTER
+    ====================== */
+    register: builder.mutation<
+      { message: string; user: User },
+      RegisterPayload
+    >({
       query: (data) => ({
         url: "/auth/register",
         method: "POST",
@@ -67,16 +74,24 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // ✅ NEW: VERIFY EMAIL (Used on the /verify-email page)
-    verifyEmail: builder.query<{ message: string }, string>({
+    /* ======================
+       VERIFY EMAIL (IMPORTANT FIX)
+       - backend uses GET /auth/verify-email?token=
+    ====================== */
+    verifyEmail: builder.mutation<{ message: string }, string>({
       query: (token) => ({
         url: `/auth/verify-email?token=${token}`,
         method: "GET",
       }),
     }),
 
-    // ✅ NEW: RESEND VERIFICATION
-    resendVerification: builder.mutation<{ message: string }, { email: string }>({
+    /* ======================
+       RESEND VERIFICATION
+    ====================== */
+    resendVerification: builder.mutation<
+      { message: string },
+      { email: string }
+    >({
       query: (data) => ({
         url: "/auth/resend-verification",
         method: "POST",
@@ -84,8 +99,13 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // ✅ NEW: FORGOT PASSWORD
-    forgotPassword: builder.mutation<{ message: string }, { email: string }>({
+    /* ======================
+       FORGOT PASSWORD
+    ====================== */
+    forgotPassword: builder.mutation<
+      { message: string },
+      { email: string }
+    >({
       query: (data) => ({
         url: "/auth/forgot-password",
         method: "POST",
@@ -93,28 +113,30 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    // ✅ NEW: RESET PASSWORD
-    resetPassword: builder.mutation<{ message: string }, { token: string; newPassword: string }>({
+    /* ======================
+       RESET PASSWORD
+    ====================== */
+    resetPassword: builder.mutation<
+      { message: string },
+      { token: string; newPassword: string }
+    >({
       query: (data) => ({
         url: "/auth/reset-password",
         method: "POST",
         body: data,
       }),
     }),
-
-    // 👤 PROFILE (Optional check for auth status)
-    getProfile: builder.query<AuthResponse, void>({
-      query: () => "/auth/me",
-    }),
   }),
 });
 
+/* ================================
+   EXPORT HOOKS
+================================ */
 export const {
   useLoginMutation,
   useRegisterMutation,
-  useVerifyEmailQuery, // Lazy query or standard query for the verification page
+  useVerifyEmailMutation,
   useResendVerificationMutation,
   useForgotPasswordMutation,
   useResetPasswordMutation,
-  useGetProfileQuery,
 } = authApi;

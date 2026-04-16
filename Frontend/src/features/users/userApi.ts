@@ -35,52 +35,91 @@ export interface UpdateProfilePayload {
 ================================ */
 export const userApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // 1️⃣ Get all users (Officer/Admin)
+
+    /* ======================
+       GET ALL USERS
+    ====================== */
     getUsers: builder.query<User[], void>({
       query: () => "/users",
-      providesTags: ["User"],
+      providesTags: (result) =>
+        result
+          ? [
+              { type: "User", id: "LIST" },
+              ...result.map((u) => ({ type: "User" as const, id: u.id })),
+            ]
+          : [{ type: "User", id: "LIST" }],
     }),
 
-    // 2️⃣ Get user by ID
+    /* ======================
+       GET SINGLE USER
+    ====================== */
     getUserById: builder.query<User, number>({
       query: (id) => `/users/${id}`,
-      providesTags: ["User"],
+      providesTags: (_result, _error, id) => [{ type: "User", id }],
     }),
 
-    // 3️⃣ Update user (Admin)
-    updateUser: builder.mutation<{ message: string }, { id: number; payload: UpdateUserPayload }>({
+    /* ======================
+       GET CURRENT USER (ME)
+       🔥 VERY IMPORTANT for auth
+    ====================== */
+    getMe: builder.query<User, void>({
+      query: () => "/users/me",
+      providesTags: [{ type: "User", id: "ME" }],
+    }),
+
+    /* ======================
+       ADMIN: UPDATE USER
+    ====================== */
+    updateUser: builder.mutation<
+      { message: string },
+      { id: number; payload: UpdateUserPayload }
+    >({
       query: ({ id, payload }) => ({
         url: `/users/${id}`,
         method: "PUT",
         body: payload,
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "User", id },
+        { type: "User", id: "LIST" },
+      ],
     }),
 
-    // 4️⃣ Delete user (Admin)
+    /* ======================
+       ADMIN: DELETE USER
+    ====================== */
     deleteUser: builder.mutation<{ message: string }, number>({
       query: (id) => ({
         url: `/users/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "LIST" }],
     }),
 
-    // 5️⃣ Update own profile
-    updateProfile: builder.mutation<{ message: string }, UpdateProfilePayload>({
+    /* ======================
+       USER: UPDATE PROFILE
+    ====================== */
+    updateProfile: builder.mutation<
+      { message: string },
+      UpdateProfilePayload
+    >({
       query: (payload) => ({
         url: "/users/profile",
         method: "PUT",
         body: payload,
       }),
-      invalidatesTags: ["User"],
+      invalidatesTags: [{ type: "User", id: "ME" }],
     }),
   }),
 });
 
+/* ================================
+   HOOKS
+================================ */
 export const {
   useGetUsersQuery,
   useGetUserByIdQuery,
+  useGetMeQuery,
   useUpdateUserMutation,
   useDeleteUserMutation,
   useUpdateProfileMutation,

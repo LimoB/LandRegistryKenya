@@ -6,13 +6,15 @@ import {
   landOwnershipHistory
 } from "../drizzle/schema";
 
-import { registerLandOnChain } from "@/blockchain/landRegistry";
+import {
+  registerLandOnChainService
+} from "../blockchain/blockchain.service";
 
 export type TLandInsert = typeof lands.$inferInsert;
 
-/* ================================
+/* ============================================================
    GET ALL LANDS
-================================ */
+============================================================ */
 export const getAllLandsService = async () => {
   return await db.query.lands.findMany({
     with: {
@@ -29,16 +31,19 @@ export const getAllLandsService = async () => {
   });
 };
 
-/* ================================
-   CREATE LAND (Citizen Submission)
-================================ */
+/* ============================================================
+   CREATE LAND (CITIZEN REGISTRATION)
+============================================================ */
 export const createLandService = async (landData: TLandInsert) => {
-  if (!landData.ownerId) {
-    throw new Error("Owner is required");
-  }
+  if (!landData.ownerId) throw new Error("Owner is required");
+  if (!landData.lrNumber) throw new Error("LR Number is required");
 
-  if (!landData.lrNumber) {
-    throw new Error("LR Number is required");
+  const existing = await db.query.lands.findFirst({
+    where: eq(lands.lrNumber, landData.lrNumber)
+  });
+
+  if (existing) {
+    throw new Error("Land already exists");
   }
 
   const [newLand] = await db.insert(lands).values({
@@ -46,31 +51,49 @@ export const createLandService = async (landData: TLandInsert) => {
     verificationStatus: "pending"
   }).returning();
 
-  // ✅ Create initial ownership record
+  /* ============================================================
+     INITIAL OWNERSHIP RECORD
+  ============================================================ */
   await db.insert(landOwnershipHistory).values({
     landId: newLand.id,
-    ownerId: newLand.ownerId
+    fromOwnerId: null,
+    toOwnerId: newLand.ownerId,
+    fromWallet: null,
+    toWallet: null
+  });
+
+  /* ============================================================
+     AUDIT LOG
+  ============================================================ */
+  await db.insert(auditLogs).values({
+    actionType: "LAND_CREATED",
+    performedBy: newLand.ownerId,
+    landId: newLand.id,
+    metadata: {
+      lrNumber: newLand.lrNumber
+    }
   });
 
   return newLand;
 };
 
-/* ================================
+/* ============================================================
    GET LAND BY LR NUMBER
-================================ */
+============================================================ */
 export const getLandByLRService = async (lrNumber: string) => {
   return await db.query.lands.findFirst({
     where: eq(lands.lrNumber, lrNumber),
     with: {
       owner: true,
-      ownershipHistory: true
+      ownershipHistory: true,
+      auditLogs: true
     }
   });
 };
 
-/* ================================
-   VERIFY LAND (Officer Action)
-================================ */
+/* ============================================================
+   VERIFY LAND (OFFICER + BLOCKCHAIN MINT)
+============================================================ */
 export const verifyLandService = async (
   landId: number,
   officerId: number
@@ -91,12 +114,18 @@ export const verifyLandService = async (
   }
 
   /* ============================================================
-     BLOCKCHAIN MINT
-     ============================================================ */
-  let receipt;
+     IDEMPOTENCY CHECK
+  ============================================================ */
+  if (land.blockchainTxHash) {
+    throw new Error("Land already minted on blockchain");
+  }
 
+  /* ============================================================
+     BLOCKCHAIN MINT (via service layer)
+  ============================================================ */
+  let receipt;
   try {
-    receipt = await registerLandOnChain(
+    receipt = await registerLandOnChainService(
       land.owner.walletAddress,
       land.lrNumber,
       land.ipfsDocHash || "N/A"
@@ -105,23 +134,19 @@ export const verifyLandService = async (
     throw new Error(`Blockchain mint failed: ${error.message}`);
   }
 
-  // ⚠️ TODO: Replace with real event parsing later
-  const onChainId = Number(
-    BigInt("0x" + receipt.hash.slice(2, 10))
-  );
-
   const txHash = receipt.hash;
+  const blockNumber = receipt.blockNumber;
 
   /* ============================================================
      DB TRANSACTION
-     ============================================================ */
+  ============================================================ */
   return await db.transaction(async (trx) => {
-    // Update land
-    const [updatedLand] = await trx.update(lands)
+    const [updatedLand] = await trx
+      .update(lands)
       .set({
         verificationStatus: "verified",
-        onChainId,
         blockchainTxHash: txHash,
+        blockNumber,
         verifiedBy: officerId,
         verifiedAt: new Date(),
         updatedAt: new Date()
@@ -129,22 +154,26 @@ export const verifyLandService = async (
       .where(eq(lands.id, landId))
       .returning();
 
-    // Audit log (NEW STRUCTURE)
+    /* ============================================================
+       AUDIT LOG
+    ============================================================ */
     await trx.insert(auditLogs).values({
       actionType: "LAND_VERIFIED",
       performedBy: officerId,
-      landId: landId,
+      landId,
       blockchainTxHash: txHash,
       metadata: {
         lrNumber: land.lrNumber,
-        ownerId: land.ownerId
+        ownerId: land.ownerId,
+        blockNumber
       }
     });
 
     return {
-      message: "Land verified and minted on blockchain",
+      message: "Land verified successfully",
       land: updatedLand,
-      txHash
+      txHash,
+      blockNumber
     };
   });
 };

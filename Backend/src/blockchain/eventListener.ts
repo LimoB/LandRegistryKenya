@@ -11,11 +11,11 @@ const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS;
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:7545";
 
 if (!CONTRACT_ADDRESS) {
-  throw new Error("❌ LAND_REGISTRY_ADDRESS missing in .env");
+  throw new Error("LAND_REGISTRY_ADDRESS missing in .env");
 }
 
 /* ============================
-   CONNECT TO BLOCKCHAIN
+   BLOCKCHAIN CONNECTION
 ============================ */
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
@@ -26,35 +26,33 @@ const contract = new ethers.Contract(
 );
 
 /* ============================
-   HELPER: WALLET → USER ID
+   WALLET CACHE (performance optimization)
 ============================ */
+const walletCache = new Map<string, number>();
+
 const getUserIdByWallet = async (wallet: string) => {
+  if (walletCache.has(wallet)) {
+    return walletCache.get(wallet)!;
+  }
+
   const user = await db.query.users.findFirst({
     where: eq(users.walletAddress, wallet),
   });
+
+  if (user?.id) {
+    walletCache.set(wallet, user.id);
+  }
 
   return user?.id || null;
 };
 
 /* ============================
-   EVENT: LandRegistered
+   LAND REGISTERED EVENT
 ============================ */
 contract.on(
   "LandRegistered",
-  async (
-    landId: bigint,
-    lrNumber: string,
-    owner: string,
-    ipfsHash: string
-  ) => {
+  async (landId: bigint, lrNumber: string, owner: string, ipfsHash: string) => {
     try {
-      console.log("📦 LandRegistered EVENT:", {
-        landId: landId.toString(),
-        lrNumber,
-        owner,
-        ipfsHash,
-      });
-
       const ownerId = await getUserIdByWallet(owner);
 
       await db
@@ -67,61 +65,61 @@ contract.on(
         })
         .where(eq(lands.lrNumber, lrNumber));
 
-      console.log("✅ Land synced to DB");
+      console.log("Land synced to database");
     } catch (err) {
-      console.error("❌ LandRegistered sync failed:", err);
+      console.error("LandRegistered sync failed:", err);
     }
   }
 );
 
 /* ============================
-   EVENT: OwnershipTransferred
+   OWNERSHIP TRANSFERRED EVENT
 ============================ */
 contract.on(
   "OwnershipTransferred",
-  async (
-    landId: bigint,
-    from: string,
-    to: string,
-    mpesaRef: string
-  ) => {
+  async (landId: bigint, from: string, to: string, mpesaRef: string) => {
     try {
-      console.log("🔄 OwnershipTransferred EVENT:", {
-        landId: landId.toString(),
-        from,
-        to,
-        mpesaRef,
+      const onChainId = Number(landId);
+
+      const land = await db.query.lands.findFirst({
+        where: eq(lands.onChainId, onChainId),
       });
 
-      const id = Number(landId);
+      if (!land) {
+        console.error("Land not found for onChainId:", onChainId);
+        return;
+      }
 
-      const newOwnerId = await getUserIdByWallet(to);
+      const fromOwnerId = await getUserIdByWallet(from);
+      const toOwnerId = await getUserIdByWallet(to);
 
       /* ============================
-         1. UPDATE LAND OWNER
+         UPDATE LAND OWNER
       ============================ */
       await db
         .update(lands)
         .set({
-          ownerId: newOwnerId ?? undefined,
+          ownerId: toOwnerId ?? undefined,
           updatedAt: new Date(),
         })
-        .where(eq(lands.onChainId, id));
+        .where(eq(lands.id, land.id));
 
       /* ============================
-         2. ADD OWNERSHIP HISTORY
+         INSERT OWNERSHIP HISTORY (FIXED)
       ============================ */
-      const oldOwnerId = await getUserIdByWallet(from);
-
       await db.insert(landOwnershipHistory).values({
-        landId: id,
-        ownerId: oldOwnerId ?? 0,
-        fromDate: new Date(),
+        landId: land.id, // ✅ DB ID (NOT blockchain ID)
+        fromOwnerId: fromOwnerId ?? null,
+        toOwnerId: toOwnerId ?? null,
+        fromWallet: from,
+        toWallet: to,
+        mpesaRef,
+        fromDate: new Date(), // ✅ FIXED (not transferredAt)
       });
 
-      console.log("✅ Ownership synced to DB");
+      console.log("Ownership synced to database");
     } catch (err) {
-      console.error("❌ Ownership sync failed:", err);
+      console.error("Ownership sync failed:", err);
     }
   }
 );
@@ -130,5 +128,5 @@ contract.on(
    START LISTENER
 ============================ */
 export const startBlockchainListener = () => {
-  console.log("🚀 Blockchain Event Listener Running...");
+  console.log("Blockchain listener initialized");
 };

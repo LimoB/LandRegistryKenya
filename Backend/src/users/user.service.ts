@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import db from "../drizzle/db";
 import { users, auditLogs } from "../drizzle/schema";
 
@@ -10,11 +10,14 @@ export type TUserInsert = typeof users.$inferInsert;
 export const getUsersService = async () => {
   return await db.query.users.findMany({
     columns: {
-      password: false // 🔒 never expose password
+      password: false
     },
     with: {
       ownedLands: {
-        columns: { id: true, lrNumber: true }
+        columns: {
+          id: true,
+          lrNumber: true
+        }
       }
     },
     orderBy: (users, { desc }) => [desc(users.createdAt)]
@@ -33,7 +36,13 @@ export const getUserByIdService = async (userId: number) => {
     with: {
       ownedLands: true,
       sentRequests: true,
-      receivedRequests: true
+      receivedRequests: true,
+      logs: true,
+      tokens: true,
+
+      // FIXED RELATIONS
+      ownershipHistoryFrom: true,
+      ownershipHistoryTo: true
     }
   });
 };
@@ -46,25 +55,28 @@ export const updateUserService = async (
   userId: number,
   updates: Partial<TUserInsert>
 ) => {
-  // 🔒 prevent dangerous updates
-  const payload = { ...updates };
+  const payload: Partial<TUserInsert> = { ...updates };
 
   delete (payload as any).password;
   delete (payload as any).id;
   delete (payload as any).createdAt;
+  delete (payload as any).emailVerifiedAt;
 
-  const result = await db.update(users)
+  const result = await db
+    .update(users)
     .set(payload)
     .where(eq(users.id, userId))
     .returning();
 
   if (!result.length) throw new Error("User not found");
 
-  // ✅ Audit log
   await db.insert(auditLogs).values({
     actionType: "USER_UPDATED",
     performedBy: adminId,
-    metadata: { updatedUserId: userId, changes: payload }
+    metadata: {
+      updatedUserId: userId,
+      changes: payload
+    }
   });
 
   return result[0];
@@ -77,14 +89,15 @@ export const updateProfileService = async (
   userId: number,
   updates: Partial<TUserInsert>
 ) => {
-  const payload = { ...updates };
+  const payload: Partial<TUserInsert> = { ...updates };
 
-  // 🔒 restrict sensitive fields
   delete (payload as any).role;
   delete (payload as any).isVerified;
   delete (payload as any).walletAddress;
+  delete (payload as any).emailVerifiedAt;
 
-  const result = await db.update(users)
+  const result = await db
+    .update(users)
     .set(payload)
     .where(eq(users.id, userId))
     .returning();
@@ -101,17 +114,19 @@ export const deleteUserService = async (
   adminId: number,
   userId: number
 ) => {
-  const result = await db.delete(users)
+  const result = await db
+    .delete(users)
     .where(eq(users.id, userId))
     .returning();
 
   if (!result.length) throw new Error("User not found");
 
-  // ✅ Audit log
   await db.insert(auditLogs).values({
     actionType: "USER_DELETED",
     performedBy: adminId,
-    metadata: { deletedUserId: userId }
+    metadata: {
+      deletedUserId: userId
+    }
   });
 
   return true;

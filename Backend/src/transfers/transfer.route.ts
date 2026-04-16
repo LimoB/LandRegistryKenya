@@ -5,7 +5,6 @@ import {
   getPending,
   rejectTransfer,
   getMySales,
-  recordPayment,
   finalizeTransfer,
   getTransferById
 } from "./transfer.controller";
@@ -13,46 +12,42 @@ import {
 import {
   citizenAuth,
   officerAuth,
-  adminAuth,
   anyRoleAuth
 } from "../middleware/bearAuth";
 
 export const transferRouter: Router = Router();
 
 /* ============================================================
-   CITIZEN (BUYER / SELLER)
-   ============================================================ */
+   CITIZEN (BUY / SELL FLOW)
+============================================================ */
 
-// Initiate purchase request
+// Create transfer request (BUY request)
 transferRouter.post("/initiate", citizenAuth, initiateTransfer);
 
-// View own sales (as seller)
+// View seller's transfers (sales history)
 transferRouter.get("/my-sales", citizenAuth, getMySales);
-
-// Record payment (buyer usually)
-transferRouter.post("/pay/:id", anyRoleAuth, recordPayment);
 
 
 /* ============================================================
-   OFFICER ACTIONS
-   ============================================================ */
+   OFFICER ACTIONS (APPROVAL FLOW)
+============================================================ */
 
 // View pending transfers
 transferRouter.get("/pending", officerAuth, getPending);
 
-// Approve transfer (moves to payment stage)
+// Approve transfer (moves to payment_pending state)
 transferRouter.patch("/approve/:id", officerAuth, approveTransfer);
-
-// Finalize transfer (blockchain + ownership change)
-transferRouter.patch("/finalize/:id", officerAuth, finalizeTransfer);
 
 // Reject transfer
 transferRouter.patch("/reject/:id", officerAuth, rejectTransfer);
 
+// Finalize transfer (after payment confirmed via webhook)
+transferRouter.patch("/finalize/:id", officerAuth, finalizeTransfer);
+
 
 /* ============================================================
-   GENERAL (AUTHENTICATED USERS)
-   ============================================================ */
+   GENERAL AUTH USERS
+============================================================ */
 
-// Get transfer details
+// Get transfer by ID (buyer/seller/officer)
 transferRouter.get("/:id", anyRoleAuth, getTransferById);

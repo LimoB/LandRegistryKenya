@@ -6,11 +6,13 @@ import { authRouter } from "./auth/auth.route";
 import { userRouter } from "./users/user.route";
 import { landRouter } from "./lands/land.route";
 import { transferRouter } from "./transfers/transfer.route";
+import { paymentRouter } from "./payments/payment.routes";
+import { auditRouter } from "./audit/audit.routes";
 
 const app: Application = express();
 
 /* ============================================================
-   SECURITY + CORE MIDDLEWARE
+   CORS
 ============================================================ */
 app.use(
   cors({
@@ -19,6 +21,18 @@ app.use(
   })
 );
 
+/* ============================================================
+   ⚠️ IMPORTANT STRIPE FIX
+   Stripe webhook needs RAW body BEFORE express.json()
+============================================================ */
+app.use(
+  "/api/payments/stripe/webhook",
+  express.raw({ type: "application/json" })
+);
+
+/* ============================================================
+   JSON MIDDLEWARE (AFTER WEBHOOK RAW ROUTE)
+============================================================ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -33,18 +47,14 @@ app.get("/", (_req: Request, res: Response) => {
 });
 
 /* ============================================================
-   PUBLIC ROUTES
+   ROUTES
 ============================================================ */
 app.use("/api/auth", authRouter);
-
-/* ============================================================
-   IMPORTANT FIX:
-   DO NOT globally apply anyRoleAuth here
-   because routers already control access per route
-============================================================ */
 app.use("/api/users", userRouter);
 app.use("/api/lands", landRouter);
 app.use("/api/transfers", transferRouter);
+app.use("/api/payments", paymentRouter);
+app.use("/api/audit", auditRouter);
 
 /* ============================================================
    404 HANDLER
