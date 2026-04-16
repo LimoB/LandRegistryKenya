@@ -7,11 +7,16 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+
     "gen": "drizzle-kit generate",
     "push": "drizzle-kit generate && drizzle-kit push",
+
     "studio": "drizzle-kit studio",
     "db:pull": "drizzle-kit pull",
-    "db:check": "drizzle-kit check"
+    "db:check": "drizzle-kit check",
+
+    "seed": "tsx src/drizzle/seed.ts",
+    "seed:reset": "tsx src/drizzle/seed.ts --reset"
   },
   "keywords": [
     "blockchain",

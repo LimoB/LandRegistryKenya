@@ -1,8 +1,9 @@
-import jwt, { type SignOptions } from 'jsonwebtoken';
-import type { Request, Response, NextFunction } from 'express';
-import ms, { type StringValue } from 'ms';
+import jwt, { type SignOptions } from "jsonwebtoken";
+import type { Request, Response, NextFunction } from "express";
 
-// === Extend Express Request to include user ===
+/* ============================================================
+   Express Type Augmentation
+============================================================ */
 declare global {
   namespace Express {
     interface Request {
@@ -12,117 +13,103 @@ declare global {
 }
 
 /* ============================================================
-   User Roles (Matches Drizzle Schema)
-   ============================================================ */
+   Roles
+============================================================ */
 export type UserRole = "admin" | "land_officer" | "citizen";
 
 /* ============================================================
-   Decoded JWT Payload Type
-   ============================================================ */
+   JWT Payload
+============================================================ */
 export type DecodedToken = {
   userId: number;
   email: string;
   role: UserRole;
-  walletAddress: string; // ✅ Critical for Blockchain actions
+  walletAddress: string;
   exp?: number;
 };
 
-// === Generate a random 6-digit verification code (OTP) ===
+/* ============================================================
+   Generate OTP
+============================================================ */
 export const generateVerificationCode = (): string =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-// === Sign Access Token ===
+/* ============================================================
+   SIGN TOKEN (SIMPLIFIED)
+============================================================ */
 export const signToken = (
   payload: DecodedToken,
   secret: string,
-  expiresIn: StringValue = '1h'
+  expiresIn: SignOptions["expiresIn"] = "1h"
 ): string => {
-  // ✅ Using 'ms' here to calculate numeric seconds for JWT
-  // This resolves the "ms is never read" error
-  const expiresInSeconds = Math.floor(ms(expiresIn) / 1000);
-  const options: SignOptions = { expiresIn: expiresInSeconds };
-  
-  return jwt.sign(payload, secret, options);
+  return jwt.sign(payload, secret, { expiresIn });
 };
 
-// === Normalize a decoded JWT payload ===
-const normalizeDecodedToken = (raw: any): DecodedToken | null => {
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-
-  const userId = typeof raw.userId === 'number' ? raw.userId : null;
-  const email = typeof raw.email === 'string' ? raw.email : null;
-  const role = raw.role;
-  const walletAddress = typeof raw.walletAddress === 'string' ? raw.walletAddress : null;
-
-  if (
-    typeof userId !== 'number' ||
-    !email ||
-    !walletAddress ||
-    !['admin', 'land_officer', 'citizen'].includes(role)
-  ) {
-    console.error('[normalizeDecodedToken] Missing/invalid fields in Land Token');
-    return null;
-  }
-
-  return {
-    userId,
-    email,
-    role,
-    walletAddress,
-    exp: typeof raw.exp === 'number' ? raw.exp : undefined,
-  };
-};
-
-// === Verify Access Token ===
+/* ============================================================
+   VERIFY TOKEN
+============================================================ */
 export const verifyToken = (
   token: string,
   secret: string
 ): DecodedToken | null => {
   try {
-    const raw = jwt.verify(token, secret);
-    return normalizeDecodedToken(raw);
-  } catch (err) {
+    const decoded = jwt.verify(token, secret);
+
+    if (typeof decoded === "string") return null;
+
+    const { userId, email, role, walletAddress, exp } = decoded as any;
+
+    if (
+      typeof userId !== "number" ||
+      typeof email !== "string" ||
+      typeof walletAddress !== "string" ||
+      !["admin", "land_officer", "citizen"].includes(role)
+    ) {
+      return null;
+    }
+
+    return { userId, email, role, walletAddress, exp };
+  } catch {
     return null;
   }
 };
 
 /* ============================================================
-   Role-Based Middleware Factory
-   ============================================================ */
+   AUTH FACTORY
+============================================================ */
 const authMiddlewareFactory = (allowedRoles: UserRole | UserRole[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const authHeader = req.header('Authorization');
+    const authHeader = req.headers.authorization;
 
     if (!authHeader) {
-      res.status(401).json({ error: 'Missing authorization token' });
+      res.status(401).json({ error: "Missing token" });
       return;
     }
 
-    const token = authHeader.startsWith('Bearer ')
+    const token = authHeader.startsWith("Bearer ")
       ? authHeader.slice(7)
       : authHeader;
 
     const secret = process.env.JWT_SECRET;
+
     if (!secret) {
-      res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET missing' });
+      res.status(500).json({ error: "Server config error" });
       return;
     }
 
     const decoded = verifyToken(token, secret);
 
     if (!decoded) {
-      res.status(401).json({ error: 'Invalid or expired token' });
+      res.status(401).json({ error: "Invalid or expired token" });
       return;
     }
 
-    const allowed = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+    const roles = Array.isArray(allowedRoles)
+      ? allowedRoles
+      : [allowedRoles];
 
-    if (!allowed.includes(decoded.role)) {
-      res.status(403).json({ 
-        error: `Access Denied. Role '${decoded.role}' not authorized for this land operation.` 
-      });
+    if (!roles.includes(decoded.role)) {
+      res.status(403).json({ error: "Forbidden" });
       return;
     }
 
@@ -132,10 +119,14 @@ const authMiddlewareFactory = (allowedRoles: UserRole | UserRole[]) => {
 };
 
 /* ============================================================
-   Export Specific Role-Based Middleware
-   ============================================================ */
-export const adminAuth = authMiddlewareFactory('admin');
-export const officerAuth = authMiddlewareFactory('land_officer');
-export const citizenAuth = authMiddlewareFactory('citizen');
-export const officialAuth = authMiddlewareFactory(['admin', 'land_officer']);
-export const anyRoleAuth = authMiddlewareFactory(['admin', 'land_officer', 'citizen']);
+   EXPORT MIDDLEWARES
+============================================================ */
+export const adminAuth = authMiddlewareFactory("admin");
+export const officerAuth = authMiddlewareFactory("land_officer");
+export const citizenAuth = authMiddlewareFactory("citizen");
+export const officialAuth = authMiddlewareFactory(["admin", "land_officer"]);
+export const anyRoleAuth = authMiddlewareFactory([
+  "admin",
+  "land_officer",
+  "citizen"
+]);

@@ -1,6 +1,11 @@
 import { eq } from "drizzle-orm";
-import db  from "../drizzle/db";
-import { auditLogs, lands } from "../drizzle/schema";
+import db from "../drizzle/db";
+import {
+  auditLogs,
+  lands,
+  landOwnershipHistory
+} from "../drizzle/schema";
+
 import { registerLandOnChain } from "@/blockchain/landRegistry";
 
 export type TLandInsert = typeof lands.$inferInsert;
@@ -12,11 +17,11 @@ export const getAllLandsService = async () => {
   return await db.query.lands.findMany({
     with: {
       owner: {
-        columns: { 
-          fullName: true, 
-          email: true, 
-          idNumber: true, 
-          walletAddress: true 
+        columns: {
+          fullName: true,
+          email: true,
+          idNumber: true,
+          walletAddress: true
         }
       }
     },
@@ -28,8 +33,25 @@ export const getAllLandsService = async () => {
    CREATE LAND (Citizen Submission)
 ================================ */
 export const createLandService = async (landData: TLandInsert) => {
-  // landData now includes ipfsDocHash from the controller
-  const [newLand] = await db.insert(lands).values(landData).returning();
+  if (!landData.ownerId) {
+    throw new Error("Owner is required");
+  }
+
+  if (!landData.lrNumber) {
+    throw new Error("LR Number is required");
+  }
+
+  const [newLand] = await db.insert(lands).values({
+    ...landData,
+    verificationStatus: "pending"
+  }).returning();
+
+  // ✅ Create initial ownership record
+  await db.insert(landOwnershipHistory).values({
+    landId: newLand.id,
+    ownerId: newLand.ownerId
+  });
+
   return newLand;
 };
 
@@ -39,66 +61,90 @@ export const createLandService = async (landData: TLandInsert) => {
 export const getLandByLRService = async (lrNumber: string) => {
   return await db.query.lands.findFirst({
     where: eq(lands.lrNumber, lrNumber),
-    with: { owner: true }
+    with: {
+      owner: true,
+      ownershipHistory: true
+    }
   });
 };
 
-// * ================================
-//    VERIFY LAND (Officer Action)
-// ================================ */
-export const verifyLandService = async (landId: number, officerId: number) => {
+/* ================================
+   VERIFY LAND (Officer Action)
+================================ */
+export const verifyLandService = async (
+  landId: number,
+  officerId: number
+) => {
   const land = await db.query.lands.findFirst({
     where: eq(lands.id, landId),
     with: { owner: true }
   });
 
-  if (!land) throw new Error("Land record not found");
-  if (land.verificationStatus === "verified") throw new Error("Already verified");
-  if (!land.owner?.walletAddress) throw new Error("Owner wallet address missing");
+  if (!land) throw new Error("Land not found");
 
-  console.log(`🔗 Minting Land LR: ${land.lrNumber} on Ganache...`);
-  
+  if (land.verificationStatus === "verified") {
+    throw new Error("Land already verified");
+  }
+
+  if (!land.owner?.walletAddress) {
+    throw new Error("Owner wallet missing");
+  }
+
+  /* ============================================================
+     BLOCKCHAIN MINT
+     ============================================================ */
+  let receipt;
+
   try {
-    // 1. Get Receipt from Blockchain (registerLandOnChain already does .wait())
-    const receipt = await registerLandOnChain(
-      land.owner.walletAddress, 
-      land.lrNumber, 
+    receipt = await registerLandOnChain(
+      land.owner.walletAddress,
+      land.lrNumber,
       land.ipfsDocHash || "N/A"
     );
+  } catch (error: any) {
+    throw new Error(`Blockchain mint failed: ${error.message}`);
+  }
 
-    // 2. Extract onChainId from Events (assuming 'LandRegistered' is your event)
-    // In ethers v6, we look at receipt.logs
-    const onChainId = Math.floor(Math.random() * 100000); // Fallback for demo
-    const txHash = receipt.hash;
+  // ⚠️ TODO: Replace with real event parsing later
+  const onChainId = Number(
+    BigInt("0x" + receipt.hash.slice(2, 10))
+  );
 
-    // 3. Database Update via Transaction
-    return await db.transaction(async (txDb) => {
-      const [updatedLand] = await txDb.update(lands)
-        .set({ 
-          verificationStatus: "verified",
-          onChainId: onChainId,
-          blockchainTxHash: txHash,
-          updatedAt: new Date()
-        })
-        .where(eq(lands.id, landId))
-        .returning();
+  const txHash = receipt.hash;
 
-      await txDb.insert(auditLogs).values({
-        action: `Verified LR: ${land.lrNumber}`,
-        performedBy: officerId,
-        landId: landId,
-        blockchainTxHash: txHash
-      });
+  /* ============================================================
+     DB TRANSACTION
+     ============================================================ */
+  return await db.transaction(async (trx) => {
+    // Update land
+    const [updatedLand] = await trx.update(lands)
+      .set({
+        verificationStatus: "verified",
+        onChainId,
+        blockchainTxHash: txHash,
+        verifiedBy: officerId,
+        verifiedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(lands.id, landId))
+      .returning();
 
-      return { 
-        message: "Land secured on blockchain", 
-        land: updatedLand, 
-        txHash: txHash 
-      };
+    // Audit log (NEW STRUCTURE)
+    await trx.insert(auditLogs).values({
+      actionType: "LAND_VERIFIED",
+      performedBy: officerId,
+      landId: landId,
+      blockchainTxHash: txHash,
+      metadata: {
+        lrNumber: land.lrNumber,
+        ownerId: land.ownerId
+      }
     });
 
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : "Blockchain error";
-    throw new Error(`Minting Failed: ${msg}`);
-  }
+    return {
+      message: "Land verified and minted on blockchain",
+      land: updatedLand,
+      txHash
+    };
+  });
 };

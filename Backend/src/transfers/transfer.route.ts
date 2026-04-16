@@ -1,38 +1,58 @@
 import { Router } from "express";
-import { 
-    initiateTransfer, 
-    approveTransfer, 
-    getPending, 
-    rejectTransfer, 
-    getMySales 
+import {
+  initiateTransfer,
+  approveTransfer,
+  getPending,
+  rejectTransfer,
+  getMySales,
+  recordPayment,
+  finalizeTransfer,
+  getTransferById
 } from "./transfer.controller";
-// Using the new specific guards from your updated bearAuth.ts
-import { citizenAuth, officerAuth } from "../middleware/bearAuth";
+
+import {
+  citizenAuth,
+  officerAuth,
+  adminAuth,
+  anyRoleAuth
+} from "../middleware/bearAuth";
 
 export const transferRouter: Router = Router();
 
 /* ============================================================
-   CITIZEN ROUTES
-   Requires a valid JWT with role: 'citizen'
+   CITIZEN (BUYER / SELLER)
    ============================================================ */
 
-// Initiate a new purchase request for a land parcel
+// Initiate purchase request
 transferRouter.post("/initiate", citizenAuth, initiateTransfer);
 
-// View land you are currently selling (Inbound transfer requests)
+// View own sales (as seller)
 transferRouter.get("/my-sales", citizenAuth, getMySales);
+
+// Record payment (buyer usually)
+transferRouter.post("/pay/:id", anyRoleAuth, recordPayment);
 
 
 /* ============================================================
-   OFFICER ROUTES
-   Requires a valid JWT with role: 'land_officer'
+   OFFICER ACTIONS
    ============================================================ */
 
-// View all transfers pending official verification
+// View pending transfers
 transferRouter.get("/pending", officerAuth, getPending);
 
-// Finalize the transfer and record on the blockchain
+// Approve transfer (moves to payment stage)
 transferRouter.patch("/approve/:id", officerAuth, approveTransfer);
 
-// Reject fraudulent, incorrect, or incomplete transfer requests
+// Finalize transfer (blockchain + ownership change)
+transferRouter.patch("/finalize/:id", officerAuth, finalizeTransfer);
+
+// Reject transfer
 transferRouter.patch("/reject/:id", officerAuth, rejectTransfer);
+
+
+/* ============================================================
+   GENERAL (AUTHENTICATED USERS)
+   ============================================================ */
+
+// Get transfer details
+transferRouter.get("/:id", anyRoleAuth, getTransferById);

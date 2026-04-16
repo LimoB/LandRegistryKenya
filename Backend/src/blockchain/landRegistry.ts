@@ -5,11 +5,21 @@ import LandRegistryArtifact from "./artifacts/LandRegistry.json";
 
 dotenv.config();
 
-const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS || "";
+/* ================================
+   ENV SAFETY CHECK
+================================ */
+const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS;
 
+if (!CONTRACT_ADDRESS) {
+  throw new Error("❌ LAND_REGISTRY_ADDRESS is missing in .env");
+}
+
+/* ================================
+   CONTRACT INSTANCE
+================================ */
 export const landRegistryContract = new ethers.Contract(
   CONTRACT_ADDRESS,
-  LandRegistryArtifact.abi, 
+  LandRegistryArtifact.abi,
   officerWallet
 );
 
@@ -17,32 +27,62 @@ export const landRegistryContract = new ethers.Contract(
    BLOCKCHAIN ACTIONS
 ================================ */
 
+/**
+ * REGISTER LAND ON CHAIN
+ * Called AFTER backend verification + IPFS upload
+ */
 export const registerLandOnChain = async (
   ownerWallet: string,
   lrNumber: string,
   ipfsHash: string
 ) => {
   try {
-    // This sends the transaction
-    const tx = await landRegistryContract.registerInitialLand(ownerWallet, lrNumber, ipfsHash);
-    // This waits for the block to be mined and returns the Receipt
-    return await tx.wait(); 
-  } catch (error) {
-    console.error("Blockchain Registration Failed:", error);
-    throw error;
+    console.log("📦 Registering land on blockchain...");
+    console.log({ ownerWallet, lrNumber, ipfsHash });
+
+    const tx = await landRegistryContract.registerInitialLand(
+      ownerWallet,
+      lrNumber,
+      ipfsHash
+    );
+
+    const receipt = await tx.wait();
+
+    console.log("✅ Land registered on-chain:", receipt.hash);
+
+    return receipt;
+  } catch (error: any) {
+    console.error("❌ Blockchain Registration Failed:", error?.message || error);
+    throw new Error("Blockchain registration failed");
   }
 };
 
+/**
+ * TRANSFER LAND OWNERSHIP ON CHAIN
+ * Called AFTER M-Pesa + DB approval
+ */
 export const transferLandOnChain = async (
   landId: number,
   newOwnerWallet: string,
   mpesaRef: string
 ) => {
   try {
-    const tx = await landRegistryContract.transferOwnership(landId, newOwnerWallet, mpesaRef);
-    return await tx.wait();
-  } catch (error) {
-    console.error("Blockchain Transfer Failed:", error);
-    throw error;
+    console.log("🔄 Transferring land on blockchain...");
+    console.log({ landId, newOwnerWallet, mpesaRef });
+
+    const tx = await landRegistryContract.transferOwnership(
+      landId,
+      newOwnerWallet,
+      mpesaRef
+    );
+
+    const receipt = await tx.wait();
+
+    console.log(" Ownership transferred on-chain:", receipt.hash);
+
+    return receipt;
+  } catch (error: any) {
+    console.error("❌ Blockchain Transfer Failed:", error?.message || error);
+    throw new Error("Blockchain transfer failed");
   }
 };

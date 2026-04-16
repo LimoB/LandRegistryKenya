@@ -4,7 +4,7 @@ import { users } from "../drizzle/schema";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-// Use $inferSelect to get the full type including password
+
 export type UserSelect = typeof users.$inferSelect;
 export type SafeUser = Omit<UserSelect, "password">;
 
@@ -12,29 +12,43 @@ export type SafeUser = Omit<UserSelect, "password">;
    REGISTER SERVICE
 ================================ */
 export const registerService = async (userData: any): Promise<SafeUser> => {
-  // 1. Check existence (Email, ID Number, or Wallet)
+  const email = userData.email?.toLowerCase().trim();
+
+  if (!email) throw new Error("Email is required");
+
+  // Prevent role injection (IMPORTANT)
+  const allowedRole = ["citizen", "land_officer"];
+  if (!allowedRole.includes(userData.role || "citizen")) {
+    throw new Error("Invalid role assignment");
+  }
+
+  // Check duplicates
   const existingUser = await db.query.users.findFirst({
     where: or(
-      eq(users.email, userData.email), 
+      eq(users.email, email),
       eq(users.idNumber, userData.idNumber),
       eq(users.walletAddress, userData.walletAddress)
     ),
   });
 
-  if (existingUser) throw new Error("User with this email, ID Number, or Wallet already exists");
+  if (existingUser) {
+    throw new Error("User already exists");
+  }
 
-  // 2. Hash password
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(userData.password, salt);
+  // Hash password
+  const hashedPassword = await bcrypt.hash(userData.password, 10);
 
-  // 3. Insert user
   const [newUser] = await db.insert(users).values({
-    ...userData,
+    fullName: userData.fullName,
+    email,
+    phone: userData.phone,
+    idNumber: userData.idNumber,
+    walletAddress: userData.walletAddress,
     password: hashedPassword,
-    isVerified: false, // Ensure they start unverified
+    role: userData.role || "citizen",
+    isVerified: false,
   }).returning();
 
-  // 4. Safely remove password
   const { password, ...safeUser } = newUser;
   return safeUser as SafeUser;
 };
@@ -42,35 +56,49 @@ export const registerService = async (userData: any): Promise<SafeUser> => {
 /* ================================
    LOGIN SERVICE
 ================================ */
-export const loginService = async (email: string, passwordAttempt: string) => {
+export const loginService = async (
+  email: string,
+  passwordAttempt: string
+) => {
+  const normalizedEmail = email.toLowerCase().trim();
+
   const user = await db.query.users.findFirst({
-    where: eq(users.email, email),
+    where: eq(users.email, normalizedEmail),
   });
 
-  // Check if user exists
-  if (!user) throw new Error("Invalid email or password");
+  if (!user) {
+    throw new Error("Invalid credentials");
+  }
 
-  // 5. Bcrypt compare
   const isMatch = await bcrypt.compare(passwordAttempt, user.password);
-  if (!isMatch) throw new Error("Invalid email or password");
 
-  // 6. Verification Check
-  // We return the user even if not verified, 
-  // and let the controller decide if it blocks the login or not.
+  if (!isMatch) {
+    throw new Error("Invalid credentials");
+  }
+
+  // Optional: block unverified users
+  if (!user.isVerified) {
+    throw new Error("Account not verified");
+  }
+
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET not configured");
+  if (!secret) throw new Error("JWT secret missing");
 
   const token = jwt.sign(
-    { 
-      userId: user.id, 
-      email: user.email, 
+    {
+      userId: user.id,
+      email: user.email,
       role: user.role,
-      walletAddress: user.walletAddress 
+      walletAddress: user.walletAddress,
     },
     secret,
     { expiresIn: "1d" }
   );
 
-  const { password: _, ...safeUser } = user;
-  return { user: safeUser as SafeUser, token };
+  const { password, ...safeUser } = user;
+
+  return {
+    user: safeUser,
+    token,
+  };
 };
