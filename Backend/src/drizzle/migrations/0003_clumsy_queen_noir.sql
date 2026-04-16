@@ -1,1 +1,0 @@
-ALTER TABLE "users" ALTER COLUMN "wallet_address" SET DATA TYPE varchar(600);

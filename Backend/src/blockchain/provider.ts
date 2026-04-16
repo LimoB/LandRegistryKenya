@@ -20,11 +20,11 @@ const PRIVATE_KEY = process.env.OFFICER_PRIVATE_KEY;
    SAFETY CHECKS
 ============================ */
 if (!RPC_URL) {
-  throw new Error("❌ BLOCKCHAIN_RPC_URL is missing");
+  throw new Error("BLOCKCHAIN_RPC_URL is missing");
 }
 
 if (!PRIVATE_KEY) {
-  throw new Error("❌ OFFICER_PRIVATE_KEY is missing from .env");
+  throw new Error("OFFICER_PRIVATE_KEY is missing from .env");
 }
 
 /* ============================
@@ -41,10 +41,11 @@ export const officerWallet = new ethers.Wallet(
 );
 
 /* ============================
-   DEBUG LOGS (SAFE VERSION)
+   INIT LOGS (SAFE - NO SECRET LEAKAGE)
 ============================ */
-console.log("\n--- 🏛️ Land Registry Blockchain Initialized ---");
-console.log(`Network: ${RPC_URL}`);
+console.log("Blockchain initialized");
+console.log(`RPC URL: ${RPC_URL}`);
 console.log(`Officer Address: ${officerWallet.address}`);
-console.log(`Private Key Loaded: ${PRIVATE_KEY.slice(0, 6)}...${PRIVATE_KEY.slice(-4)}`);
-console.log("------------------------------------------------------\n");
+console.log(
+  `Private Key Loaded: ${PRIVATE_KEY.slice(0, 6)}...${PRIVATE_KEY.slice(-4)}`
+);

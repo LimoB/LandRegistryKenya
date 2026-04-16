@@ -36,10 +36,10 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        fullName: "John Kamau",
-        email: "john.kamau@gmail.com",
+        fullName: "Citizen Limo",
+        email: "citizenlim07@gmail.com",
         idNumber: "33334444",
-        walletAddress: "0xa8e50f60e5d34e7532e0a197221e3082489833f1",
+        walletAddress: "0xcb486a177511be0c2d6847a3d047732d8fb1f994bff25fa64c03e32d7caa4728",
         password: hashedPassword,
         role: "citizen",
         isVerified: true,
@@ -49,7 +49,7 @@ async function seed() {
         fullName: "Sarah Wanjiku",
         email: "sarah.wanjiku@outlook.com",
         idNumber: "55556666",
-        walletAddress: "0x8cbef89a6716215433baddf34eae5e004275a1d0",
+        walletAddress: "0xa69aa1d44c401f0009da981a9d3aff6e6b89fde7a68ba90036e24151d34c0623",
         password: hashedPassword,
         role: "land_officer",
         isVerified: true,

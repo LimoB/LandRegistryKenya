@@ -1,10 +1,8 @@
-import { ethers } from "ethers";
 import db from "../drizzle/db";
 import {
   lands,
   landOwnershipHistory,
   blockchainEvents,
-  idempotencyKeys,
   users,
 } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -23,6 +21,8 @@ if (!CONTRACT_ADDRESS) {
 /* ============================================================
    PROVIDER + CONTRACT
 ============================================================ */
+import { ethers } from "ethers";
+
 export const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 export const contract = new ethers.Contract(
@@ -32,16 +32,14 @@ export const contract = new ethers.Contract(
 );
 
 /* ============================================================
-   WALLET RESOLVER (cached)
+   WALLET CACHE
 ============================================================ */
 const walletCache = new Map<string, number>();
 
 export const resolveUserIdByWallet = async (
   wallet: string
 ): Promise<number | null> => {
-  if (walletCache.has(wallet)) {
-    return walletCache.get(wallet)!;
-  }
+  if (walletCache.has(wallet)) return walletCache.get(wallet)!;
 
   const user = await db.query.users.findFirst({
     where: eq(users.walletAddress, wallet),
@@ -56,18 +54,18 @@ export const resolveUserIdByWallet = async (
 };
 
 /* ============================================================
-   IDEMPOTENCY CHECK
+   BLOCKCHAIN EVENT CHECK
 ============================================================ */
-export const isDuplicateEvent = async (txHash: string) => {
-  const existing = await db.query.blockchainEvents.findFirst({
+const isProcessed = async (txHash: string) => {
+  const event = await db.query.blockchainEvents.findFirst({
     where: eq(blockchainEvents.txHash, txHash),
   });
 
-  return !!existing;
+  return !!event?.processed;
 };
 
 /* ============================================================
-   SAVE BLOCKCHAIN EVENT (GENERIC)
+   SAVE OR UPDATE EVENT (IDEMPOTENT + RETRY SAFE)
 ============================================================ */
 export const saveBlockchainEvent = async (params: {
   eventName: string;
@@ -75,8 +73,15 @@ export const saveBlockchainEvent = async (params: {
   blockNumber?: number;
   payload: any;
 }) => {
-  const duplicate = await isDuplicateEvent(params.txHash);
-  if (duplicate) return;
+  const existing = await db.query.blockchainEvents.findFirst({
+    where: eq(blockchainEvents.txHash, params.txHash),
+  });
+
+  // already processed → fully skip
+  if (existing?.processed) return;
+
+  // exists but not processed → retry scenario
+  if (existing && !existing.processed) return;
 
   await db.insert(blockchainEvents).values({
     eventName: params.eventName,
@@ -88,15 +93,13 @@ export const saveBlockchainEvent = async (params: {
 };
 
 /* ============================================================
-   REGISTER LAND ON CHAIN (CALLED FROM LAND SERVICE)
+   REGISTER LAND ON CHAIN
 ============================================================ */
 export const registerLandOnChainService = async (
   ownerWallet: string,
   lrNumber: string,
   ipfsHash: string
 ) => {
-  const signer = provider.getSigner();
-
   const tx = await contract.registerLand(
     ownerWallet,
     lrNumber,
@@ -112,15 +115,13 @@ export const registerLandOnChainService = async (
 };
 
 /* ============================================================
-   TRANSFER LAND ON CHAIN (CALLED FROM TRANSFER SERVICE)
+   TRANSFER LAND ON CHAIN
 ============================================================ */
 export const transferLandOnChainService = async (
   landOnChainId: number,
   toWallet: string,
   reference: string
 ) => {
-  const signer = provider.getSigner();
-
   const tx = await contract.transferOwnership(
     landOnChainId,
     toWallet,
@@ -136,7 +137,7 @@ export const transferLandOnChainService = async (
 };
 
 /* ============================================================
-   HANDLE LAND REGISTERED EVENT
+   LAND REGISTERED EVENT
 ============================================================ */
 export const handleLandRegisteredEvent = async (
   landId: bigint,
@@ -145,32 +146,41 @@ export const handleLandRegisteredEvent = async (
   ipfsHash: string,
   txHash: string
 ) => {
-  await saveBlockchainEvent({
-    eventName: "LandRegistered",
-    txHash,
-    payload: {
-      landId: Number(landId),
-      lrNumber,
-      ownerWallet,
-      ipfsHash,
-    },
-  });
+  if (await isProcessed(txHash)) return;
 
   const ownerId = await resolveUserIdByWallet(ownerWallet);
 
-  await db
-    .update(lands)
-    .set({
-      onChainId: Number(landId),
-      verificationStatus: "verified",
-      ipfsDocHash: ipfsHash,
-      ownerId: ownerId ?? undefined,
-    })
-    .where(eq(lands.lrNumber, lrNumber));
+  await db.transaction(async (trx) => {
+    await saveBlockchainEvent({
+      eventName: "LandRegistered",
+      txHash,
+      payload: {
+        landId: Number(landId),
+        lrNumber,
+        ownerWallet,
+        ipfsHash,
+      },
+    });
+
+    await trx
+      .update(lands)
+      .set({
+        onChainId: Number(landId),
+        verificationStatus: "verified",
+        ipfsDocHash: ipfsHash,
+        ownerId: ownerId ?? undefined,
+      })
+      .where(eq(lands.lrNumber, lrNumber));
+
+    await trx
+      .update(blockchainEvents)
+      .set({ processed: true })
+      .where(eq(blockchainEvents.txHash, txHash));
+  });
 };
 
 /* ============================================================
-   HANDLE OWNERSHIP TRANSFER EVENT
+   OWNERSHIP TRANSFER EVENT
 ============================================================ */
 export const handleOwnershipTransferredEvent = async (
   landId: bigint,
@@ -179,24 +189,23 @@ export const handleOwnershipTransferredEvent = async (
   mpesaRef: string,
   txHash: string
 ) => {
-  await saveBlockchainEvent({
-    eventName: "OwnershipTransferred",
-    txHash,
-    payload: {
-      landId: Number(landId),
-      fromWallet,
-      toWallet,
-      mpesaRef,
-    },
-  });
+  if (await isProcessed(txHash)) return;
 
   const fromOwnerId = await resolveUserIdByWallet(fromWallet);
   const toOwnerId = await resolveUserIdByWallet(toWallet);
 
   await db.transaction(async (trx) => {
-    /* ============================
-       UPDATE LAND OWNER
-    ============================ */
+    await saveBlockchainEvent({
+      eventName: "OwnershipTransferred",
+      txHash,
+      payload: {
+        landId: Number(landId),
+        fromWallet,
+        toWallet,
+        mpesaRef,
+      },
+    });
+
     await trx
       .update(lands)
       .set({
@@ -205,19 +214,11 @@ export const handleOwnershipTransferredEvent = async (
       })
       .where(eq(lands.onChainId, Number(landId)));
 
-    /* ============================
-       CLOSE PREVIOUS OWNERSHIP
-    ============================ */
     await trx
       .update(landOwnershipHistory)
-      .set({
-        toDate: new Date(),
-      })
+      .set({ toDate: new Date() })
       .where(eq(landOwnershipHistory.landId, Number(landId)));
 
-    /* ============================
-       INSERT NEW OWNERSHIP RECORD
-    ============================ */
     await trx.insert(landOwnershipHistory).values({
       landId: Number(landId),
       fromOwnerId: fromOwnerId ?? null,
@@ -227,11 +228,16 @@ export const handleOwnershipTransferredEvent = async (
       mpesaRef,
       blockchainTxHash: txHash,
     });
+
+    await trx
+      .update(blockchainEvents)
+      .set({ processed: true })
+      .where(eq(blockchainEvents.txHash, txHash));
   });
 };
 
 /* ============================================================
-   START EVENT LISTENERS
+   START LISTENERS
 ============================================================ */
 export const startBlockchainService = () => {
   console.log("Blockchain service started");
