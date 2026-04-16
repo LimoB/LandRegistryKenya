@@ -2,126 +2,224 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { logout } from "../app/slices/authSlice";
-import { 
-  LayoutDashboard, Users, Map as MapIcon, Receipt, ShieldCheck, 
-  Search, Home, PlusCircle, ArrowRightLeft, LogOut, Fingerprint, 
-  Activity, UserCircle, FileSearch, CheckSquare, 
-  Database, Globe, Wallet, History, AlertTriangle, FileText
+import ThemeToggle from "../components/ThemeToggle";
+import {
+  LayoutDashboard,
+  Users,
+  Database,
+  AlertTriangle,
+  ShieldCheck,
+  Search,
+  Home,
+  PlusCircle,
+  ArrowRightLeft,
+  LogOut,
+  Fingerprint,
+  FileSearch,
+  CheckSquare,
+  FileText,
+  Globe,
+  Wallet,
+  History,
+  UserCircle,
+  Activity,
+  CreditCard,
+  Blocks,
+  KeyRound,
 } from "lucide-react";
 
 interface SidebarProps {
   role: "admin" | "land_officer" | "citizen";
 }
 
+type NavItem = {
+  name: string;
+  path: string;
+  icon: React.ElementType;
+  comingSoon?: boolean;
+};
+
+type NavSection = Record<string, NavItem[]>;
+
 const Sidebar: React.FC<SidebarProps> = ({ role }) => {
   const location = useLocation();
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
 
-  const navItems = {
-    admin: [
-      { name: "System Overview", path: "/admin/dashboard", icon: Activity },
-      { name: "Manage Users", path: "/admin/users", icon: Users },
-      { name: "National Registry", path: "/admin/registry", icon: Database }, 
-      { name: "Fraud Control", path: "/admin/lands", icon: AlertTriangle },   
-      { name: "Global Transfers", path: "/admin/transfers", icon: Receipt },
-      { name: "Security Audit", path: "/admin/audit-logs", icon: ShieldCheck },
-    ],
-    land_officer: [
-      { name: "Task Dashboard", path: "/officer/dashboard", icon: LayoutDashboard },
-      { name: "Pending Checks", path: "/officer/verify-lands", icon: FileSearch },
-      { name: "Approve Transfers", path: "/officer/transfers", icon: CheckSquare },
-      { name: "Registry Search", path: "/officer/search", icon: Search },
-      { name: "Official Reports", path: "/officer/reports", icon: FileText },
-    ],
-    citizen: [
-      { name: "My Dashboard", path: "/citizen/dashboard", icon: Home },
-      { name: "My Properties", path: "/citizen/my-lands", icon: MapIcon },
-      { name: "Register New Land", path: "/citizen/register-land", icon: PlusCircle },
-      { name: "Transfer Land", path: "/citizen/transfer-land", icon: ArrowRightLeft },
-      { name: "Payment History", path: "/citizen/payments", icon: History },
-      { name: "Digital Wallet", path: "/citizen/wallet", icon: Wallet },
-      { name: "My Profile", path: "/citizen/profile", icon: UserCircle },
-    ],
+  const nav: Record<SidebarProps["role"], NavSection> = {
+    admin: {
+      overview: [
+        { name: "System Overview", path: "/admin/dashboard", icon: Activity },
+      ],
+      core: [
+        { name: "Users", path: "/admin/users", icon: Users },
+        { name: "Land Registry", path: "/admin/lands", icon: Database },
+        { name: "Transfers", path: "/admin/transfers", icon: ArrowRightLeft },
+      ],
+      finance: [
+        { name: "Payments", path: "/admin/payments", icon: CreditCard, comingSoon: true },
+      ],
+      security: [
+        { name: "Audit Logs", path: "/admin/audit-logs", icon: ShieldCheck },
+        { name: "Fraud Monitoring", path: "/admin/fraud", icon: AlertTriangle },
+      ],
+      blockchain: [
+        { name: "Blockchain Events", path: "/admin/blockchain", icon: Blocks },
+        { name: "Idempotency Keys", path: "/admin/idempotency", icon: KeyRound },
+      ],
+    },
+
+    land_officer: {
+      overview: [
+        { name: "Dashboard", path: "/officer/dashboard", icon: LayoutDashboard },
+      ],
+      operations: [
+        { name: "Verify Lands", path: "/officer/verify-lands", icon: FileSearch },
+        { name: "Approve Transfers", path: "/officer/transfers", icon: CheckSquare },
+      ],
+      tools: [
+        { name: "Registry Search", path: "/officer/search", icon: Search },
+        { name: "Reports", path: "/officer/reports", icon: FileText, comingSoon: true },
+      ],
+    },
+
+    citizen: {
+      overview: [
+        { name: "Dashboard", path: "/citizen/dashboard", icon: Home },
+      ],
+      property: [
+        { name: "My Lands", path: "/citizen/my-lands", icon: Database },
+        { name: "Register Land", path: "/citizen/register-land", icon: PlusCircle },
+        { name: "Transfer Land", path: "/citizen/transfer-land", icon: ArrowRightLeft },
+      ],
+      finance: [
+        { name: "Payments", path: "/citizen/payments", icon: History, comingSoon: true },
+        { name: "Wallet", path: "/citizen/wallet", icon: Wallet, comingSoon: true },
+      ],
+      identity: [
+        { name: "Profile", path: "/citizen/profile", icon: UserCircle },
+      ],
+    },
+  };
+
+  const sections = nav[role];
+
+  const renderSection = (title: string, items: NavItem[]) => {
+    return (
+      <div className="mt-6">
+        <p className="px-4 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          {title}
+        </p>
+
+        <div className="space-y-1">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+
+            if (item.comingSoon) {
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-400 hover:bg-white/40 dark:hover:bg-slate-900/40 transition"
+                >
+                  <Icon size={18} />
+                  <span className="truncate">{item.name}</span>
+                  <span className="ml-auto text-[10px] text-yellow-500">
+                    soon
+                  </span>
+                </Link>
+              );
+            }
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
+                  isActive
+                    ? "bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-400 text-white shadow-lg"
+                    : "text-slate-600 hover:bg-white/50 dark:hover:bg-slate-900/50 hover:backdrop-blur"
+                }`}
+              >
+                <Icon size={18} />
+                <span className="truncate">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <aside className="w-72 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-900 h-screen sticky top-0 flex flex-col z-50">
-      
-      {/* Brand Logo */}
-      <div className="p-8 pb-4">
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="bg-blue-600 text-white p-2.5 rounded-2xl shadow-xl shadow-blue-500/30 group-hover:rotate-6 transition-all">
-            <Fingerprint size={22} strokeWidth={2.5} />
+    <aside className="w-72 h-screen sticky top-0 flex flex-col glass">
+
+      {/* BRAND */}
+      <div className="px-6 py-6 border-b border-border">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl">
+            <Fingerprint size={20} />
           </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-slate-900 dark:text-white tracking-tight text-xl leading-none">
-              Land<span className="text-blue-600">Ledger</span>
-            </span>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Registry.ke</span>
+
+          <div>
+            <h1 className="font-bold text-text">LandLedger</h1>
+            <p className="text-[10px] text-slate-400">
+              Kenya Registry System
+            </p>
           </div>
-        </Link>
+        </div>
+
+        {/* ROLE + THEME TOGGLE */}
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
+            {role}
+          </span>
+
+          {/* THEME TOGGLE HERE */}
+          <ThemeToggle />
+        </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1 overflow-y-auto mt-6 custom-scrollbar">
-        <div className="px-4 mb-4">
-          <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest rounded-lg">
-            {role.replace("_", " ")}
-          </span>
-        </div>
+      {/* NAV */}
+      <div className="flex-1 overflow-y-auto px-3 py-4">
+        {Object.entries(sections).map(([title, items]) => (
+          <div key={title}>{renderSection(title, items)}</div>
+        ))}
+      </div>
 
-        {navItems[role].map((item) => {
-          const isActive = location.pathname === item.path;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold text-sm transition-all duration-300 group ${
-                isActive
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20"
-                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900 hover:text-blue-600"
-              }`}
-            >
-              <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "text-white" : "text-slate-400 group-hover:text-blue-600"} />
-              <span className="truncate">{item.name}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Profile & Logout */}
-      <div className="p-4 border-t border-slate-100 dark:border-slate-900">
-        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-3xl p-5 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-              {user?.fullName?.charAt(0) || "U"}
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.fullName || "Guest User"}</span>
-              <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-tighter flex items-center gap-1">
-                <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse" /> Identity Verified
-              </span>
-            </div>
+      {/* USER PANEL */}
+      <div className="p-4 border-t border-border">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center font-bold">
+            {user?.fullName?.charAt(0) || "U"}
           </div>
 
-          <button
-            onClick={() => dispatch(logout())}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all border border-transparent hover:border-red-100"
-          >
-            <LogOut size={14} />
-            Sign Out
-          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-bold truncate">
+              {user?.fullName || "User"}
+            </p>
+            <p className="text-[10px] text-emerald-500">
+              Verified Identity
+            </p>
+          </div>
         </div>
 
-        {/* Blockchain Status */}
-        <div className="mt-4 px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Globe size={12} className="text-slate-400" />
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Chain: Polygon</span>
-            </div>
-            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-0.5 rounded-full">Secure</span>
+        <button
+          onClick={() => dispatch(logout())}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10 rounded-xl transition"
+        >
+          <LogOut size={14} />
+          Logout
+        </button>
+
+        {/* FOOTER */}
+        <div className="mt-4 flex items-center justify-between text-[10px] text-slate-400">
+          <div className="flex items-center gap-1">
+            <Globe size={12} />
+            Polygon Network
+          </div>
+          <span className="text-emerald-500 font-bold">Secure</span>
         </div>
       </div>
     </aside>

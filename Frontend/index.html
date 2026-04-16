@@ -15,17 +15,26 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
 
-    <style>
-      /* Prevent "White Flash" on load in Dark Mode 
-         Matches your bg-[#fafafa] and dark:bg-slate-950
-      */
-      :root {
-        background-color: #fafafa;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          background-color: #020617; /* slate-950 */
+    <script>
+      (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        
+        if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
         }
+      })();
+    </script>
+
+    <style>
+      /* Match your index.css variables exactly to prevent flashing */
+      :root {
+        background-color: #ffffff; /* rgb(255 255 255) */
+      }
+      html.dark {
+        background-color: #0f172a; /* rgb(15 23 42) */
       }
       body {
         margin: 0;
@@ -35,7 +44,7 @@
       }
     </style>
   </head>
-  <body class="selection:bg-blue-600 selection:text-white">
+  <body class="selection:bg-primary selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
