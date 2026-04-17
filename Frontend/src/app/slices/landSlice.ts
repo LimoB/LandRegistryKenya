@@ -1,17 +1,30 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Land } from "../../features/lands/landApi";
 
+/* ================================
+   STATE TYPES
+================================ */
+type VerificationFilter =
+  | "all"
+  | "pending"
+  | "verified"
+  | "rejected";
+
 interface LandState {
   lands: Land[];
   selectedLand: Land | null;
 
-  filterByVerification: "all" | "pending" | "verified" | "rejected";
+  filterByVerification: VerificationFilter;
 
   isRegisterModalOpen: boolean;
   isVerifyModalOpen: boolean;
+
   isLoading: boolean;
 }
 
+/* ================================
+   INITIAL STATE
+================================ */
 const initialState: LandState = {
   lands: [],
   selectedLand: null,
@@ -24,12 +37,15 @@ const initialState: LandState = {
   isLoading: false,
 };
 
+/* ================================
+   SLICE
+================================ */
 const landSlice = createSlice({
   name: "land",
   initialState,
   reducers: {
     /* ======================
-       DATA
+       DATA HANDLING
     ====================== */
     setLands: (state, action: PayloadAction<Land[]>) => {
       state.lands = action.payload;
@@ -39,15 +55,18 @@ const landSlice = createSlice({
       state.selectedLand = action.payload;
     },
 
-    setFilterByVerification: (
-      state,
-      action: PayloadAction<"all" | "pending" | "verified" | "rejected">
-    ) => {
-      state.filterByVerification = action.payload;
-    },
-
     setLandLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
+    },
+
+    /* ======================
+       FILTERING
+    ====================== */
+    setFilterByVerification: (
+      state,
+      action: PayloadAction<VerificationFilter>
+    ) => {
+      state.filterByVerification = action.payload;
     },
 
     /* ======================
@@ -56,6 +75,7 @@ const landSlice = createSlice({
     openRegisterModal: (state) => {
       state.isRegisterModalOpen = true;
     },
+
     closeRegisterModal: (state) => {
       state.isRegisterModalOpen = false;
     },
@@ -63,24 +83,32 @@ const landSlice = createSlice({
     openVerifyModal: (state) => {
       state.isVerifyModalOpen = true;
     },
+
     closeVerifyModal: (state) => {
       state.isVerifyModalOpen = false;
       state.selectedLand = null;
     },
+
+    /* ======================
+       RESET
+    ====================== */
+    resetLandState: () => initialState,
   },
 });
 
 export const {
   setLands,
   setSelectedLand,
-  setFilterByVerification,
   setLandLoading,
+  setFilterByVerification,
 
   openRegisterModal,
   closeRegisterModal,
 
   openVerifyModal,
   closeVerifyModal,
+
+  resetLandState,
 } = landSlice.actions;
 
 export default landSlice.reducer;

@@ -1,11 +1,20 @@
 import { baseApi } from "../../app/api/baseApi";
 
 /* ================================
-   TYPES (MATCH BACKEND)
+   TYPES (MATCH BACKEND STRICTLY)
 ================================ */
+export type LandType =
+  | "agricultural"
+  | "residential"
+  | "commercial"
+  | "industrial";
+
+export type VerificationStatus = "pending" | "verified" | "rejected";
+
 export interface LandOwner {
   fullName: string;
   email: string;
+  idNumber?: string;
   walletAddress: string;
 }
 
@@ -18,17 +27,21 @@ export interface Land {
   constituency: string;
 
   sizeInAcres: number;
-  landType: "agricultural" | "residential" | "commercial" | "industrial";
+  landType: LandType;
 
-  verificationStatus: "pending" | "verified" | "rejected";
+  verificationStatus: VerificationStatus;
 
   isForSale: boolean;
   priceInKsh?: number;
 
   ipfsDocHash?: string;
   blockchainTxHash?: string;
+  blockNumber?: number;
 
   onChainId?: number;
+
+  verifiedBy?: number;
+  verifiedAt?: string;
 
   createdAt: string;
   updatedAt?: string;
@@ -37,7 +50,7 @@ export interface Land {
 }
 
 /* ================================
-   API RESPONSE WRAPPERS (BACKEND STYLE)
+   API WRAPPERS (BACKEND STYLE)
 ================================ */
 interface LandsResponse {
   success: boolean;
@@ -48,14 +61,6 @@ interface LandsResponse {
 interface SingleLandResponse {
   success: boolean;
   data: Land;
-  error?: string;
-}
-
-interface RegisterLandResponse {
-  success: boolean;
-  message: string;
-  data: Land;
-  ipfsLink: string;
 }
 
 /* ================================
@@ -66,33 +71,12 @@ export interface RegisterLandPayload {
   county: string;
   constituency: string;
   sizeInAcres: number;
-  landType: Land["landType"];
+  landType: LandType;
   document: File;
 }
 
 /* ================================
-   TYPE GUARDS (NO ANY)
-================================ */
-const isLandsResponse = (res: unknown): res is LandsResponse => {
-  return (
-    typeof res === "object" &&
-    res !== null &&
-    "data" in res &&
-    Array.isArray((res as LandsResponse).data)
-  );
-};
-
-const isSingleLandResponse = (res: unknown): res is SingleLandResponse => {
-  return (
-    typeof res === "object" &&
-    res !== null &&
-    "data" in res &&
-    typeof (res as SingleLandResponse).data === "object"
-  );
-};
-
-/* ================================
-   LAND API
+   API
 ================================ */
 export const landApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -102,34 +86,28 @@ export const landApi = baseApi.injectEndpoints({
     ====================== */
     getLands: builder.query<Land[], void>({
       query: () => "/lands",
-      transformResponse: (response: unknown) => {
-        if (isLandsResponse(response)) {
-          return response.data;
-        }
-        return [];
+      transformResponse: (response: LandsResponse) => {
+        return response.data;
       },
       providesTags: ["Land"],
     }),
 
     /* ======================
-       GET LAND BY LR NUMBER
+       GET BY LR NUMBER
     ====================== */
     getLandByLR: builder.query<Land, string>({
       query: (lrNumber) => `/lands/lr/${lrNumber}`,
-      transformResponse: (response: unknown) => {
-        if (isSingleLandResponse(response)) {
-          return response.data;
-        }
-        throw new Error("Invalid land response format");
+      transformResponse: (response: SingleLandResponse) => {
+        return response.data;
       },
-      providesTags: ["Land"],
+      providesTags: (_result, _error, lr) => [{ type: "Land", id: lr }],
     }),
 
     /* ======================
        REGISTER LAND
     ====================== */
     registerLand: builder.mutation<
-      RegisterLandResponse,
+      { success: boolean; message: string; data: Land },
       RegisterLandPayload
     >({
       query: (data) => {
@@ -138,7 +116,7 @@ export const landApi = baseApi.injectEndpoints({
         formData.append("lrNumber", data.lrNumber);
         formData.append("county", data.county);
         formData.append("constituency", data.constituency);
-        formData.append("sizeInAcres", data.sizeInAcres.toString());
+        formData.append("sizeInAcres", String(data.sizeInAcres));
         formData.append("landType", data.landType);
         formData.append("document", data.document);
 
@@ -167,6 +145,9 @@ export const landApi = baseApi.injectEndpoints({
   }),
 });
 
+/* ================================
+   HOOKS
+================================ */
 export const {
   useGetLandsQuery,
   useGetLandByLRQuery,

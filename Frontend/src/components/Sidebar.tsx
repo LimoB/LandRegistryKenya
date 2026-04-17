@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { logout } from "../app/slices/authSlice";
 import ThemeToggle from "../components/ThemeToggle";
+
 import {
   LayoutDashboard,
   Users,
@@ -17,15 +18,14 @@ import {
   Fingerprint,
   FileSearch,
   CheckSquare,
-  FileText,
   Globe,
   Wallet,
   History,
   UserCircle,
   Activity,
-  CreditCard,
   Blocks,
   KeyRound,
+  ChevronDown,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -46,26 +46,25 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth);
 
+  const [openUserMenu, setOpenUserMenu] = useState(false);
+
   const nav: Record<SidebarProps["role"], NavSection> = {
     admin: {
       overview: [
-        { name: "System Overview", path: "/admin/dashboard", icon: Activity },
+        { name: "Overview", path: "/admin/dashboard", icon: Activity },
       ],
-      core: [
+      management: [
         { name: "Users", path: "/admin/users", icon: Users },
         { name: "Land Registry", path: "/admin/lands", icon: Database },
         { name: "Transfers", path: "/admin/transfers", icon: ArrowRightLeft },
-      ],
-      finance: [
-        { name: "Payments", path: "/admin/payments", icon: CreditCard, comingSoon: true },
       ],
       security: [
         { name: "Audit Logs", path: "/admin/audit-logs", icon: ShieldCheck },
         { name: "Fraud Monitoring", path: "/admin/fraud", icon: AlertTriangle },
       ],
       blockchain: [
-        { name: "Blockchain Events", path: "/admin/blockchain", icon: Blocks },
-        { name: "Idempotency Keys", path: "/admin/idempotency", icon: KeyRound },
+        { name: "Events", path: "/admin/blockchain", icon: Blocks },
+        { name: "Keys", path: "/admin/idempotency", icon: KeyRound },
       ],
     },
 
@@ -75,11 +74,10 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
       ],
       operations: [
         { name: "Verify Lands", path: "/officer/verify-lands", icon: FileSearch },
-        { name: "Approve Transfers", path: "/officer/transfers", icon: CheckSquare },
+        { name: "Transfers", path: "/officer/transfers", icon: CheckSquare },
       ],
       tools: [
-        { name: "Registry Search", path: "/officer/search", icon: Search },
-        { name: "Reports", path: "/officer/reports", icon: FileText, comingSoon: true },
+        { name: "Search", path: "/officer/search", icon: Search },
       ],
     },
 
@@ -89,137 +87,129 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
       ],
       property: [
         { name: "My Lands", path: "/citizen/my-lands", icon: Database },
-        { name: "Register Land", path: "/citizen/register-land", icon: PlusCircle },
-        { name: "Transfer Land", path: "/citizen/transfer-land", icon: ArrowRightLeft },
+        { name: "Register", path: "/citizen/register-land", icon: PlusCircle },
+        { name: "Transfer", path: "/citizen/transfer-land", icon: ArrowRightLeft },
       ],
       finance: [
-        { name: "Payments", path: "/citizen/payments", icon: History, comingSoon: true },
-        { name: "Wallet", path: "/citizen/wallet", icon: Wallet, comingSoon: true },
-      ],
-      identity: [
-        { name: "Profile", path: "/citizen/profile", icon: UserCircle },
+        { name: "Payments", path: "/citizen/payments", icon: History },
+        { name: "Wallet", path: "/citizen/wallet", icon: Wallet },
       ],
     },
   };
 
   const sections = nav[role];
 
-  const renderSection = (title: string, items: NavItem[]) => {
-    return (
-      <div className="mt-6">
-        <p className="px-4 mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          {title}
-        </p>
+  const renderSection = (title: string, items: NavItem[]) => (
+    <div className="mt-5">
+      <p className="px-3 mb-2 text-[9px] uppercase tracking-widest text-text/30">
+        {title}
+      </p>
 
-        <div className="space-y-1">
-          {items.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
+      <div className="space-y-1">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path;
 
-            if (item.comingSoon) {
-              return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-400 hover:bg-white/40 dark:hover:bg-slate-900/40 transition"
-                >
-                  <Icon size={18} />
-                  <span className="truncate">{item.name}</span>
-                  <span className="ml-auto text-[10px] text-yellow-500">
-                    soon
-                  </span>
-                </Link>
-              );
-            }
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs transition ${
+                isActive
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-text/60 hover:bg-white/5 hover:text-text"
+              }`}
+            >
+              <Icon size={16} />
+              <span className="truncate">{item.name}</span>
 
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-400 text-white shadow-lg"
-                    : "text-slate-600 hover:bg-white/50 dark:hover:bg-slate-900/50 hover:backdrop-blur"
-                }`}
-              >
-                <Icon size={18} />
-                <span className="truncate">{item.name}</span>
-              </Link>
-            );
-          })}
-        </div>
+              {item.comingSoon && (
+                <span className="ml-auto text-[9px] text-yellow-500">
+                  soon
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
-    <aside className="w-72 h-screen sticky top-0 flex flex-col glass">
+    <aside className="w-64 h-screen sticky top-0 flex flex-col border-r border-border/40 bg-bg">
 
       {/* BRAND */}
-      <div className="px-6 py-6 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl">
-            <Fingerprint size={20} />
+      <div className="px-5 py-4 border-b border-border/40 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-primary text-white rounded-lg">
+            <Fingerprint size={16} />
           </div>
-
-          <div>
-            <h1 className="font-bold text-text">LandLedger</h1>
-            <p className="text-[10px] text-slate-400">
-              Kenya Registry System
-            </p>
-          </div>
+          <span className="text-sm font-semibold">LandLedger</span>
         </div>
 
-        {/* ROLE + THEME TOGGLE */}
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
-            {role}
-          </span>
-
-          {/* THEME TOGGLE HERE */}
-          <ThemeToggle />
-        </div>
+        <ThemeToggle />
       </div>
 
       {/* NAV */}
-      <div className="flex-1 overflow-y-auto px-3 py-4">
+      <div className="flex-1 overflow-y-auto px-2 py-3">
         {Object.entries(sections).map(([title, items]) => (
           <div key={title}>{renderSection(title, items)}</div>
         ))}
       </div>
 
       {/* USER PANEL */}
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 text-white flex items-center justify-center font-bold">
+      <div className="border-t border-border/40 p-3">
+
+        {/* USER BUTTON */}
+        <button
+          onClick={() => setOpenUserMenu(!openUserMenu)}
+          className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition"
+        >
+          <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center text-xs font-bold">
             {user?.fullName?.charAt(0) || "U"}
           </div>
 
-          <div className="min-w-0">
-            <p className="text-sm font-bold truncate">
+          <div className="flex-1 text-left">
+            <p className="text-xs font-semibold truncate">
               {user?.fullName || "User"}
             </p>
-            <p className="text-[10px] text-emerald-500">
-              Verified Identity
+            <p className="text-[10px] text-text/40 capitalize">
+              {role.replace("_", " ")}
             </p>
           </div>
-        </div>
 
-        <button
-          onClick={() => dispatch(logout())}
-          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-red-500 hover:bg-red-500/10 rounded-xl transition"
-        >
-          <LogOut size={14} />
-          Logout
+          <ChevronDown size={14} className="text-text/40" />
         </button>
 
-        {/* FOOTER */}
-        <div className="mt-4 flex items-center justify-between text-[10px] text-slate-400">
-          <div className="flex items-center gap-1">
-            <Globe size={12} />
-            Polygon Network
+        {/* DROPDOWN */}
+        {openUserMenu && (
+          <div className="mt-2 bg-card border border-border/40 rounded-lg p-1 space-y-1">
+
+            <Link
+              to={`/${role}/profile`}
+              className="flex items-center gap-2 px-3 py-2 text-xs rounded-md hover:bg-white/5"
+            >
+              <UserCircle size={14} />
+              Profile
+            </Link>
+
+            <button
+              onClick={() => dispatch(logout())}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-md text-red-500 hover:bg-red-500/10"
+            >
+              <LogOut size={14} />
+              Sign out
+            </button>
           </div>
-          <span className="text-emerald-500 font-bold">Secure</span>
+        )}
+
+        {/* FOOTER */}
+        <div className="mt-3 flex items-center justify-between text-[10px] text-text/40">
+          <div className="flex items-center gap-1">
+            <Globe size={10} />
+            Mainnet
+          </div>
+          <span className="text-emerald-500">Secure</span>
         </div>
       </div>
     </aside>

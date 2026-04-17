@@ -22,37 +22,40 @@ export interface TransferRequest {
   createdAt: string;
 
   land: {
+    id: number;
     lrNumber: string;
     county?: string;
     onChainId: number;
+    priceInKsh: string;
   };
 
   buyer: {
+    id: number;
     fullName: string;
     walletAddress: string;
   };
 
   seller: {
+    id: number;
     fullName: string;
+    walletAddress?: string;
   };
 }
 
 /* ================================
    PAYLOADS
 ================================ */
-export interface InitiateTransferPayload {
+export interface CreateTransferPayload {
   landId: number;
 }
 
 export interface RejectTransferPayload {
-  id: number;
   reason: string;
 }
 
-export interface PaymentPayload {
-  id: number;
-  mpesaCode: string;
+export interface MpesaPaymentPayload {
   amount: string;
+  mpesaCode: string;
 }
 
 /* ================================
@@ -61,62 +64,57 @@ export interface PaymentPayload {
 export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
-    /* ======================
-       1. INITIATE TRANSFER
-    ====================== */
-    initiateTransfer: builder.mutation<
+    /* ============================================================
+       1. CREATE TRANSFER REQUEST
+    ============================================================ */
+    createTransfer: builder.mutation<
       { message: string; request: TransferRequest },
-      InitiateTransferPayload
+      CreateTransferPayload
     >({
       query: (body) => ({
-        url: "/transfers/initiate",
+        url: "/transfers",
         method: "POST",
         body,
       }),
       invalidatesTags: ["Transfer"],
     }),
 
-    /* ======================
-       2. PENDING (OFFICER)
-    ====================== */
+    /* ============================================================
+       2. GET PENDING TRANSFERS (OFFICER)
+    ============================================================ */
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
       providesTags: ["Transfer"],
     }),
 
-    /* ======================
-       3. MY SALES (SELLER)
-    ====================== */
-    getMySales: builder.query<TransferRequest[], void>({
-      query: () => "/transfers/my-sales",
-      providesTags: ["Transfer"],
-    }),
-
-    /* ======================
-       4. GET SINGLE TRANSFER
-    ====================== */
+    /* ============================================================
+       3. GET SINGLE TRANSFER
+    ============================================================ */
     getTransferById: builder.query<TransferRequest, number>({
       query: (id) => `/transfers/${id}`,
       providesTags: (_res, _err, id) => [{ type: "Transfer", id }],
     }),
 
-    /* ======================
-       5. APPROVE (OFFICER)
-    ====================== */
-    approveTransfer: builder.mutation<{ message: string }, number>({
+    /* ============================================================
+       4. APPROVE TRANSFER (OFFICER)
+    ============================================================ */
+    approveTransfer: builder.mutation<
+      { message: string },
+      number
+    >({
       query: (id) => ({
         url: `/transfers/approve/${id}`,
         method: "PATCH",
       }),
-      invalidatesTags: ["Transfer", "Land"],
+      invalidatesTags: ["Transfer"],
     }),
 
-    /* ======================
-       6. REJECT (OFFICER)
-    ====================== */
+    /* ============================================================
+       5. REJECT TRANSFER (OFFICER)
+    ============================================================ */
     rejectTransfer: builder.mutation<
       { message: string },
-      RejectTransferPayload
+      { id: number; reason: string }
     >({
       query: ({ id, reason }) => ({
         url: `/transfers/reject/${id}`,
@@ -126,33 +124,44 @@ export const transferApi = baseApi.injectEndpoints({
       invalidatesTags: ["Transfer"],
     }),
 
-    /* ======================
-       7. RECORD PAYMENT
-    ====================== */
-    recordPayment: builder.mutation<
+    /* ============================================================
+       6. MARK AS PAID (MPESA / STRIPE)
+    ============================================================ */
+    markAsPaid: builder.mutation<
       { message: string },
-      PaymentPayload
+      { id: number; paymentMethod: "stripe" | "mpesa"; reference?: string }
     >({
-      query: ({ id, mpesaCode, amount }) => ({
+      query: ({ id, paymentMethod, reference }) => ({
         url: `/transfers/pay/${id}`,
         method: "POST",
         body: {
-          mpesaCode,
-          amount,
+          paymentMethod,
+          reference,
         },
       }),
       invalidatesTags: ["Transfer"],
     }),
 
-    /* ======================
-       8. FINALIZE (BLOCKCHAIN)
-    ====================== */
-    finalizeTransfer: builder.mutation<{ message: string }, number>({
+    /* ============================================================
+       7. FINALIZE TRANSFER (BLOCKCHAIN)
+    ============================================================ */
+    finalizeTransfer: builder.mutation<
+      { message: string; txHash: string },
+      number
+    >({
       query: (id) => ({
         url: `/transfers/finalize/${id}`,
         method: "PATCH",
       }),
       invalidatesTags: ["Transfer", "Land"],
+    }),
+
+    /* ============================================================
+       8. GET MY SALES (SELLER VIEW)
+    ============================================================ */
+    getMySales: builder.query<TransferRequest[], number>({
+      query: (sellerId) => `/transfers/seller/${sellerId}`,
+      providesTags: ["Transfer"],
     }),
   }),
 });
@@ -161,13 +170,12 @@ export const transferApi = baseApi.injectEndpoints({
    HOOKS
 ================================ */
 export const {
-  useInitiateTransferMutation,
+  useCreateTransferMutation,
   useGetPendingTransfersQuery,
-  useGetMySalesQuery,
   useGetTransferByIdQuery,
-
   useApproveTransferMutation,
   useRejectTransferMutation,
-  useRecordPaymentMutation,
+  useMarkAsPaidMutation,
   useFinalizeTransferMutation,
+  useGetMySalesQuery,
 } = transferApi;

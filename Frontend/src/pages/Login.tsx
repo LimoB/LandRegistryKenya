@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useLoginMutation } from "../features/auth/authApi";
 import { useAppDispatch } from "../app/hooks";
-import { setTempEmail } from "../app/slices/authSlice";
+import {
+  setLoginPendingVerification,
+} from "../app/slices/authSlice";
 import toast from "react-hot-toast";
 
-// Icons
 import {
   Lock,
   Mail,
@@ -18,9 +19,7 @@ import {
   Info,
 } from "lucide-react";
 
-/* ================================
-   TYPES
-================================ */
+/* ================= TYPES ================= */
 interface InputFieldProps {
   icon: React.ReactNode;
   type?: string;
@@ -36,6 +35,7 @@ interface ApiError {
   message?: string;
 }
 
+/* ================= COMPONENT ================= */
 const Login: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -47,12 +47,8 @@ const Login: React.FC = () => {
   });
 
   const [showPassword, setShowPassword] = useState(false);
-
   const [login, { isLoading }] = useLoginMutation();
 
-  /* ================================
-     INPUT CHANGE
-  =================================*/
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
 
@@ -62,26 +58,19 @@ const Login: React.FC = () => {
     }));
   };
 
-  /* ================================
-     VALIDATION
-  =================================*/
   const validateForm = () => {
     if (!formData.email || !formData.password) {
-      toast.error("Email and password are required");
+      toast.error("Email and password required");
       return false;
     }
     return true;
   };
 
-  /* ================================
-     SUBMIT
-  =================================*/
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
-    const loadingToast = toast.loading("Verifying credentials...");
+    const loadingToast = toast.loading("Signing in...");
 
     try {
       const res = await login({
@@ -89,83 +78,87 @@ const Login: React.FC = () => {
         password: formData.password,
       }).unwrap();
 
-      const firstName =
-        (res.user?.fullName || "User").trim().split(/\s+/)[0];
-
-      toast.success(`Welcome back, ${firstName}!`, {
+      toast.success(`Welcome back, ${res.user.fullName.split(" ")[0]}`, {
         id: loadingToast,
       });
 
-      /* ======================
-         ROLE ROUTING
-      ====================== */
-      const role = res.user?.role;
+      /* =========================
+         ROUTE BY ROLE
+      ========================= */
+      const role = res.user.role;
 
       if (role === "admin") navigate("/admin/dashboard");
       else if (role === "land_officer") navigate("/officer/dashboard");
       else navigate("/citizen/dashboard");
+
     } catch (err: unknown) {
       const error = err as ApiError;
 
-      if (error.status === 403) {
-        dispatch(setTempEmail(formData.email));
-        toast.error("Account not verified", { id: loadingToast });
+      const status = error?.status;
+      const message =
+        error?.data?.message ||
+        error?.data?.error ||
+        error?.message ||
+        "Login failed";
+
+      /* =========================
+         OTP / VERIFICATION FLOW
+      ========================= */
+      if (status === 403 || message.toLowerCase().includes("verify")) {
+        dispatch(setLoginPendingVerification(formData.email));
+
+        toast.error("Please verify your account first", {
+          id: loadingToast,
+        });
+
         navigate("/verify-email");
         return;
       }
 
-      toast.error(
-        error?.data?.message ||
-          error?.data?.error ||
-          error?.message ||
-          "Login failed",
-        { id: loadingToast }
-      );
+      toast.error(message, { id: loadingToast });
     }
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 font-sans">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-bg text-text">
 
       {/* LEFT SIDE */}
-      <div className="flex items-center justify-center p-6 md:p-12 lg:p-20">
+      <div className="flex items-center justify-center px-6 py-12">
 
-        <div className="w-full max-w-md space-y-10">
+        <div className="w-full max-w-sm space-y-8">
 
           {/* HEADER */}
-          <header className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-[10px] font-bold uppercase text-blue-600">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
               <ShieldCheck size={12} />
-              Secure Access Portal
+              Secure Login
             </div>
 
-            <h2 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Log in to your <span className="text-blue-600">Portal</span>
+            <h2 className="text-2xl font-semibold">
+              Sign in to your account
             </h2>
 
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Access your secure land registry dashboard
+            <p className="text-xs text-text/50">
+              Access your land registry dashboard
             </p>
-          </header>
+          </div>
 
           {/* FORM */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
 
-            {/* EMAIL */}
             <InputField
-              icon={<Mail size={18} />}
+              icon={<Mail size={16} />}
               type="email"
               name="email"
-              placeholder="Enter your email"
+              placeholder="Email address"
               value={formData.email}
               onChange={handleInputChange}
             />
 
             {/* PASSWORD */}
             <div className="relative group">
-
-              <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
-                <Lock size={18} />
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
+                <Lock size={16} />
               </div>
 
               <input
@@ -173,109 +166,92 @@ const Login: React.FC = () => {
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
-                placeholder="Enter your password"
-                className="w-full pl-14 pr-14 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
+                placeholder="Password"
+                className="w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 required
               />
 
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text/40 hover:text-primary"
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
 
             {/* OPTIONS */}
             <div className="flex items-center justify-between text-xs">
-
-              <label className="flex items-center gap-2 text-slate-500 cursor-pointer">
+              <label className="flex items-center gap-2 text-text/50">
                 <input
                   type="checkbox"
                   name="rememberMe"
                   checked={formData.rememberMe}
                   onChange={handleInputChange}
-                  className="w-4 h-4 rounded border-slate-300 text-blue-600"
+                  className="w-3.5 h-3.5"
                 />
                 Remember me
               </label>
 
-              <Link
-                to="/forgot-password"
-                className="text-blue-600 hover:underline font-medium"
-              >
-                Forgot password?
+              <Link to="/forgot-password" className="text-primary hover:underline">
+                Forgot?
               </Link>
-
             </div>
 
             {/* BUTTON */}
             <button
               disabled={isLoading}
               type="submit"
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3 h-14 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-2.5 text-sm rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 transition"
             >
               {isLoading ? (
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 size={16} className="animate-spin" />
               ) : (
                 <>
-                  Sign In <ArrowRight size={18} />
+                  Sign In <ArrowRight size={14} />
                 </>
               )}
             </button>
           </form>
 
           {/* FOOTER */}
-          <footer className="text-center space-y-2">
-            <p className="text-xs text-slate-500">
-              Don’t have an account?
-            </p>
-
-            <Link
-              to="/register"
-              className="text-blue-600 font-semibold hover:underline"
-            >
-              Create account
+          <div className="text-center text-xs text-text/50">
+            No account?{" "}
+            <Link to="/register" className="text-primary">
+              Create one
             </Link>
-          </footer>
-
+          </div>
         </div>
       </div>
 
       {/* RIGHT SIDE */}
-      <section className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700 text-white relative overflow-hidden">
+      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-emerald-500 text-white">
 
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[length:20px_20px]" />
+        <div className="max-w-xs text-center space-y-5">
 
-        <div className="relative z-10 max-w-md text-center space-y-6 p-10">
-
-          <div className="mx-auto w-fit p-6 bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20">
-            <Fingerprint size={64} />
+          <div className="mx-auto p-4 bg-white/10 rounded-xl">
+            <Fingerprint size={40} />
           </div>
 
-          <h3 className="text-3xl font-bold">
-            National Land Registry
+          <h3 className="text-xl font-semibold">
+            Land Registry System
           </h3>
 
-          <p className="text-sm text-blue-100">
-            Secure, transparent, and tamper-proof land ownership system.
+          <p className="text-xs text-white/80">
+            Secure and transparent land ownership platform.
           </p>
 
-          <div className="flex items-start gap-3 text-xs bg-white/10 p-4 rounded-2xl border border-white/10">
-            <Info size={16} />
-            <p>All login attempts are monitored for security compliance.</p>
+          <div className="flex items-start gap-2 text-[11px] bg-white/10 p-3 rounded-lg">
+            <Info size={14} />
+            All login activity is monitored for security.
           </div>
-
         </div>
-      </section>
+      </div>
     </div>
   );
 };
 
-/* ================================
-   INPUT COMPONENT
-================================ */
+/* ================= INPUT ================= */
 const InputField: React.FC<InputFieldProps> = ({
   icon,
   type = "text",
@@ -285,8 +261,7 @@ const InputField: React.FC<InputFieldProps> = ({
   onChange,
 }) => (
   <div className="relative group">
-
-    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
       {icon}
     </div>
 
@@ -296,7 +271,7 @@ const InputField: React.FC<InputFieldProps> = ({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full pl-14 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white"
+      className="w-full pl-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
       required
     />
   </div>

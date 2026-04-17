@@ -1,7 +1,38 @@
 import { baseApi } from "../../app/api/baseApi";
 
+/* ============================================================
+   TYPES (MATCH BACKEND RELATIONS)
+============================================================ */
+export interface LandMini {
+  id: number;
+  lrNumber: string;
+}
+
+export interface AuditLog {
+  id: number;
+  actionType: string;
+  createdAt: string;
+}
+
+export interface Token {
+  id: number;
+  token: string;
+}
+
+export interface OwnershipHistory {
+  id: number;
+  fromUserId: number;
+  toUserId: number;
+}
+
+export interface Request {
+  id: number;
+  status: string;
+  createdAt: string;
+}
+
 /* ================================
-   TYPES
+   USER (FULL BACKEND SHAPE)
 ================================ */
 export interface User {
   id: number;
@@ -13,9 +44,21 @@ export interface User {
   role: "admin" | "land_officer" | "citizen";
   isVerified: boolean;
   createdAt: string;
+
+  /* RELATIONS FROM BACKEND */
+  ownedLands?: LandMini[];
+  sentRequests?: Request[];
+  receivedRequests?: Request[];
+  logs?: AuditLog[];
+  tokens?: Token[];
+
+  ownershipHistoryFrom?: OwnershipHistory[];
+  ownershipHistoryTo?: OwnershipHistory[];
 }
 
-/* Payloads */
+/* ================================
+   PAYLOADS
+================================ */
 export interface UpdateUserPayload {
   fullName?: string;
   email?: string;
@@ -30,14 +73,14 @@ export interface UpdateProfilePayload {
   email?: string;
 }
 
-/* ================================
+/* ============================================================
    USER API
-================================ */
+============================================================ */
 export const userApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ======================
-       GET ALL USERS
+       GET ALL USERS (ADMIN/OFFICER)
     ====================== */
     getUsers: builder.query<User[], void>({
       query: () => "/users",
@@ -51,16 +94,15 @@ export const userApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       GET SINGLE USER
+       GET USER BY ID (FULL RELATIONS)
     ====================== */
     getUserById: builder.query<User, number>({
       query: (id) => `/users/${id}`,
-      providesTags: (_result, _error, id) => [{ type: "User", id }],
+      providesTags: (_res, _err, id) => [{ type: "User", id }],
     }),
 
     /* ======================
        GET CURRENT USER (ME)
-       🔥 VERY IMPORTANT for auth
     ====================== */
     getMe: builder.query<User, void>({
       query: () => "/users/me",
@@ -68,10 +110,10 @@ export const userApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       ADMIN: UPDATE USER
+       ADMIN UPDATE USER (AUDIT LOGGED)
     ====================== */
     updateUser: builder.mutation<
-      { message: string },
+      { message: string; user: User },
       { id: number; payload: UpdateUserPayload }
     >({
       query: ({ id, payload }) => ({
@@ -79,14 +121,14 @@ export const userApi = baseApi.injectEndpoints({
         method: "PUT",
         body: payload,
       }),
-      invalidatesTags: (_result, _error, { id }) => [
+      invalidatesTags: (_res, _err, { id }) => [
         { type: "User", id },
         { type: "User", id: "LIST" },
       ],
     }),
 
     /* ======================
-       ADMIN: DELETE USER
+       DELETE USER (AUDIT LOGGED)
     ====================== */
     deleteUser: builder.mutation<{ message: string }, number>({
       query: (id) => ({
@@ -97,10 +139,10 @@ export const userApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       USER: UPDATE PROFILE
+       UPDATE PROFILE (SELF ONLY)
     ====================== */
     updateProfile: builder.mutation<
-      { message: string },
+      { message: string; user: User },
       UpdateProfilePayload
     >({
       query: (payload) => ({
@@ -113,9 +155,9 @@ export const userApi = baseApi.injectEndpoints({
   }),
 });
 
-/* ================================
+/* ============================================================
    HOOKS
-================================ */
+============================================================ */
 export const {
   useGetUsersQuery,
   useGetUserByIdQuery,

@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { useRegisterMutation } from "../features/auth/authApi";
 import { useNavigate, Link } from "react-router-dom";
-import { useDispatch } from "react-redux";
-import { setTempEmail } from "../app/slices/authSlice";
+import { useAppDispatch } from "../app/hooks";
+import { setLoginPendingVerification } from "../app/slices/authSlice";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
 
-// Icons
 import {
   User,
   Mail,
@@ -19,13 +18,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-/* ================================
-   TYPES
-================================ */
+/* ================= TYPES ================= */
 interface ApiError {
-  data?: {
-    message?: string;
-  };
+  status?: number;
+  data?: { message?: string };
   message?: string;
 }
 
@@ -40,8 +36,9 @@ interface InputFieldProps {
   rightElement?: React.ReactNode;
 }
 
+/* ================= COMPONENT ================= */
 const Register: React.FC = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -55,22 +52,19 @@ const Register: React.FC = () => {
 
   const [register, { isLoading }] = useRegisterMutation();
 
-  /* ================================
-     HANDLE CHANGE
-  =================================*/
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
     setForm((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
   };
 
-  /* ================================
-     WALLET CONNECT
-  =================================*/
+  /* ================= WALLET ================= */
   const handleFetchWallet = async () => {
     if (!window.ethereum) {
-      toast.error("Install MetaMask first");
+      toast.error("MetaMask not detected");
       return;
     }
 
@@ -80,22 +74,20 @@ const Register: React.FC = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
 
-      if (accounts.length > 0) {
+      if (accounts?.length) {
         setForm((prev) => ({
           ...prev,
           walletAddress: accounts[0],
         }));
 
-        toast.success("Wallet connected!", { id: loading });
+        toast.success("Wallet connected", { id: loading });
       }
     } catch {
       toast.error("Wallet connection failed", { id: loading });
     }
   };
 
-  /* ================================
-     VALIDATION
-  =================================*/
+  /* ================= VALIDATION ================= */
   const validate = () => {
     if (
       !form.fullName ||
@@ -121,12 +113,9 @@ const Register: React.FC = () => {
     return true;
   };
 
-  /* ================================
-     SUBMIT
-  =================================*/
+  /* ================= SUBMIT ================= */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validate()) return;
 
     const loading = toast.loading("Creating account...");
@@ -134,9 +123,10 @@ const Register: React.FC = () => {
     try {
       const res = await register(form).unwrap();
 
-      dispatch(setTempEmail(form.email));
+      // ✅ ONLY THIS IS NEEDED (same as login flow)
+      dispatch(setLoginPendingVerification(form.email));
 
-      toast.success(res.message || "Account created successfully", {
+      toast.success(res.message || "Account created", {
         id: loading,
       });
 
@@ -152,61 +142,60 @@ const Register: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 font-sans">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-bg text-text">
 
       {/* LEFT SIDE */}
-      <div className="flex items-center justify-center p-6 md:p-12 lg:p-20">
-
-        <div className="w-full max-w-md space-y-10">
+      <div className="flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-sm space-y-8">
 
           {/* HEADER */}
-          <header className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-[10px] font-bold uppercase text-blue-600">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
               <ShieldCheck size={12} />
-              Secure Registration
+              Create Account
             </div>
 
-            <h2 className="text-4xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Create your <span className="text-blue-600">Account</span>
+            <h2 className="text-2xl font-semibold">
+              Register account
             </h2>
 
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Register to access the National Land Registry system
+            <p className="text-xs text-text/50">
+              Access the land registry platform
             </p>
-          </header>
+          </div>
 
           {/* FORM */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
 
             <InputField
-              icon={<User size={18} />}
+              icon={<User size={16} />}
               name="fullName"
-              placeholder="Full Name"
+              placeholder="Full name"
               value={form.fullName}
               onChange={handleChange}
             />
 
             <InputField
-              icon={<Mail size={18} />}
-              name="email"
+              icon={<Mail size={16} />}
               type="email"
-              placeholder="Email Address"
+              name="email"
+              placeholder="Email"
               value={form.email}
               onChange={handleChange}
             />
 
             <InputField
-              icon={<FileDigit size={18} />}
+              icon={<FileDigit size={16} />}
               name="idNumber"
-              placeholder="ID Number"
+              placeholder="ID number"
               value={form.idNumber}
               onChange={handleChange}
             />
 
             <InputField
-              icon={<Wallet size={18} />}
+              icon={<Wallet size={16} />}
               name="walletAddress"
-              placeholder="Wallet Address"
+              placeholder="Wallet address"
               value={form.walletAddress}
               onChange={handleChange}
               isMono
@@ -214,15 +203,15 @@ const Register: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleFetchWallet}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary rounded-md hover:opacity-80"
                 >
-                  <RefreshCw size={16} />
+                  <RefreshCw size={14} />
                 </button>
               }
             />
 
             <InputField
-              icon={<Lock size={18} />}
+              icon={<Lock size={16} />}
               type="password"
               name="password"
               placeholder="Password"
@@ -230,67 +219,55 @@ const Register: React.FC = () => {
               onChange={handleChange}
             />
 
-            {/* BUTTON */}
             <button
               disabled={isLoading}
               type="submit"
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-sm uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center gap-3 h-14 disabled:opacity-70 disabled:cursor-not-allowed"
+              className="w-full py-2.5 text-sm rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 transition"
             >
               {isLoading ? (
-                <Loader2 className="animate-spin" size={20} />
+                <Loader2 size={16} className="animate-spin" />
               ) : (
                 <>
-                  Create Account <ArrowRight size={18} />
+                  Create Account <ArrowRight size={14} />
                 </>
               )}
             </button>
           </form>
 
           {/* FOOTER */}
-          <footer className="text-center space-y-2">
-            <p className="text-xs text-slate-500">
-              Already have an account?
-            </p>
-
-            <Link
-              to="/login"
-              className="text-blue-600 font-semibold hover:underline"
-            >
-              Sign in here
+          <div className="text-center text-xs text-text/50">
+            Already have an account?{" "}
+            <Link to="/login" className="text-primary">
+              Sign in
             </Link>
-          </footer>
-
+          </div>
         </div>
       </div>
 
-      {/* RIGHT SIDE (MATCH LOGIN STYLE) */}
-      <section className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-indigo-700 text-white relative overflow-hidden">
+      {/* RIGHT SIDE */}
+      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-emerald-500 text-white">
 
-        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle,_white_1px,_transparent_1px)] bg-[length:20px_20px]" />
+        <div className="max-w-xs text-center space-y-5">
 
-        <div className="relative z-10 max-w-md text-center space-y-6 p-10">
-
-          <div className="mx-auto w-fit p-6 bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20">
-            <ShieldCheck size={64} />
+          <div className="mx-auto p-4 bg-white/10 rounded-xl">
+            <ShieldCheck size={40} />
           </div>
 
-          <h3 className="text-3xl font-bold">
-            National Land Registry
+          <h3 className="text-xl font-semibold">
+            Land Registry System
           </h3>
 
-          <p className="text-sm text-blue-100">
-            Secure identity-based land registration system powered by blockchain
+          <p className="text-xs text-white/80">
+            Secure identity-based land registration powered by blockchain.
           </p>
 
         </div>
-      </section>
+      </div>
     </div>
   );
 };
 
-/* ================================
-   INPUT COMPONENT
-================================ */
+/* ================= INPUT ================= */
 const InputField: React.FC<InputFieldProps> = ({
   icon,
   type = "text",
@@ -302,8 +279,7 @@ const InputField: React.FC<InputFieldProps> = ({
   rightElement,
 }) => (
   <div className="relative group">
-
-    <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
       {icon}
     </div>
 
@@ -313,7 +289,7 @@ const InputField: React.FC<InputFieldProps> = ({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`w-full pl-14 pr-12 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all dark:text-white ${
+      className={`w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
         isMono ? "font-mono text-xs" : ""
       }`}
       required

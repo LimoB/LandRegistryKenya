@@ -22,7 +22,7 @@ export interface AuthResponse {
 }
 
 /* ============================================================
-   AUTH PAYLOADS
+   PAYLOADS
 ============================================================ */
 export interface RegisterPayload {
   fullName: string;
@@ -43,12 +43,12 @@ export interface ForgotPasswordPayload {
 }
 
 export interface ResetPasswordPayload {
-  token: string; // OTP CODE (6 digits)
+  token: string;
   newPassword: string;
 }
 
 export interface VerifyEmailPayload {
-  token: string; // OTP CODE (6 digits)
+  token: string;
 }
 
 export interface ResendVerificationPayload {
@@ -80,77 +80,77 @@ export const authApi = baseApi.injectEndpoints({
       },
     }),
 
-    /* ======================
-       REGISTER
-    ====================== */
-    register: builder.mutation<
-      { message: string; user: User },
-      RegisterPayload
-    >({
-      query: (data) => ({
-        url: "/auth/register",
-        method: "POST",
-        body: data,
-      }),
-    }),
+/* ======================
+   REGISTER
+====================== */
+register: builder.mutation<
+  { message: string; user: User },
+  RegisterPayload
+>({
+  query: (data) => ({
+    url: "/auth/register",
+    method: "POST",
+    body: data,
+  }),
+}),
 
-    /* ======================
-       VERIFY EMAIL (OTP VERSION)
-    ====================== */
-    verifyEmail: builder.mutation<{ message: string }, VerifyEmailPayload>({
-      query: (data) => ({
-        url: "/auth/verify-email",
-        method: "POST", // IMPORTANT: OTP uses POST body, not GET link
-        body: data,
-      }),
-    }),
+/* ======================
+   VERIFY EMAIL (FIXED → GET + QUERY PARAM)
+====================== */
+verifyEmail: builder.mutation<{ message: string }, VerifyEmailPayload>({
+  query: ({ token }) => ({
+    url: `/auth/verify-email?token=${encodeURIComponent(token)}`,
+    method: "GET",
+  }),
+}),
 
-    /* ======================
-       RESEND VERIFICATION
-    ====================== */
-    resendVerification: builder.mutation<
-      { message: string },
-      ResendVerificationPayload
-    >({
-      query: (data) => ({
-        url: "/auth/resend-verification",
-        method: "POST",
-        body: data,
-      }),
-    }),
+/* ======================
+   RESEND VERIFICATION
+====================== */
+resendVerification: builder.mutation<
+  { message: string },
+  ResendVerificationPayload
+>({
+  query: (data) => ({
+    url: "/auth/resend-verification",
+    method: "POST",
+    body: data,
+  }),
+}),
 
-    /* ======================
-       FORGOT PASSWORD (OTP)
-    ====================== */
-    forgotPassword: builder.mutation<
-      { message: string },
-      ForgotPasswordPayload
-    >({
-      query: (data) => ({
-        url: "/auth/forgot-password",
-        method: "POST",
-        body: data,
-      }),
-    }),
+/* ======================
+   FORGOT PASSWORD
+====================== */
+forgotPassword: builder.mutation<
+  { message: string },
+  ForgotPasswordPayload
+>({
+  query: (data) => ({
+    url: "/auth/forgot-password",
+    method: "POST",
+    body: data,
+  }),
+}),
 
-    /* ======================
-       RESET PASSWORD (OTP VERIFY)
-    ====================== */
-    resetPassword: builder.mutation<
-      { message: string },
-      ResetPasswordPayload
-    >({
-      query: (data) => ({
-        url: "/auth/reset-password",
-        method: "POST",
-        body: data,
-      }),
-    }),
+/* ======================
+   RESET PASSWORD
+====================== */
+resetPassword: builder.mutation<
+  { message: string },
+  ResetPasswordPayload
+>({
+  query: (data) => ({
+    url: "/auth/reset-password",
+    method: "POST",
+    body: data,
+  }),
+}),
+
   }),
 });
 
 /* ============================================================
-   EXPORT HOOKS
+   HOOKS
 ============================================================ */
 export const {
   useLoginMutation,

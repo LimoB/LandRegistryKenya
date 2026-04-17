@@ -8,18 +8,12 @@ const ThemeToggle: React.FC = () => {
   return (
     <button
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card text-text hover:opacity-80 transition"
+      className="h-8 w-8 flex items-center justify-center rounded-lg border border-border/40 bg-card text-text/70 hover:text-text hover:bg-white/5 transition"
     >
       {theme === "dark" ? (
-        <>
-          <Sun size={16} />
-          Light
-        </>
+        <Sun size={14} />
       ) : (
-        <>
-          <Moon size={16} />
-          Dark
-        </>
+        <Moon size={14} />
       )}
     </button>
   );

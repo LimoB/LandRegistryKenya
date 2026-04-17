@@ -21,7 +21,6 @@ interface AuthState {
   user: User | null;
   token: string | null;
 
-  // OTP / EMAIL FLOW SUPPORT
   tempEmail: string | null;
   pendingVerification: boolean;
 
@@ -30,26 +29,36 @@ interface AuthState {
 }
 
 /* ============================================================
-   SAFE LOCAL STORAGE LOAD
+   SAFE STORAGE HELPERS
 ============================================================ */
-const getInitialUser = (): User | null => {
+const safeGet = (key: string): string | null => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(key);
+};
+
+const safeGetUser = (): User | null => {
   try {
-    const stored = localStorage.getItem("user");
+    const stored = safeGet("user");
     return stored ? JSON.parse(stored) : null;
   } catch {
-    localStorage.removeItem("user");
+    if (typeof window !== "undefined") localStorage.removeItem("user");
     return null;
   }
 };
 
+/* ============================================================
+   INITIAL STATE
+============================================================ */
+const token = safeGet("token");
+
 const initialState: AuthState = {
-  user: getInitialUser(),
-  token: localStorage.getItem("token"),
+  user: safeGetUser(),
+  token,
 
   tempEmail: null,
   pendingVerification: false,
 
-  isAuthenticated: !!localStorage.getItem("token"),
+  isAuthenticated: !!token,
   authHydrated: false,
 };
 
@@ -77,31 +86,38 @@ const authSlice = createSlice({
       state.tempEmail = null;
       state.pendingVerification = false;
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(user));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
+      }
     },
 
     /* ======================
-       EMAIL VERIFICATION FLOW (OTP START)
+       LOGIN FAILED (UNVERIFIED FLOW SUPPORT)
     ====================== */
-    setTempEmail: (state, action: PayloadAction<string>) => {
+    setLoginPendingVerification: (
+      state,
+      action: PayloadAction<string>
+    ) => {
       state.tempEmail = action.payload;
-    },
-
-    setPendingVerification: (state, action: PayloadAction<boolean>) => {
-      state.pendingVerification = action.payload;
+      state.pendingVerification = true;
+      state.isAuthenticated = false;
     },
 
     /* ======================
-       AFTER EMAIL VERIFIED
+       EMAIL VERIFICATION SUCCESS
     ====================== */
     markVerified: (state) => {
       if (state.user) {
         state.user.isVerified = true;
-        localStorage.setItem("user", JSON.stringify(state.user));
+
+        if (typeof window !== "undefined") {
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
       }
 
       state.pendingVerification = false;
+      state.tempEmail = null;
     },
 
     /* ======================
@@ -109,7 +125,10 @@ const authSlice = createSlice({
     ====================== */
     updateUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
-      localStorage.setItem("user", JSON.stringify(action.payload));
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("user", JSON.stringify(action.payload));
+      }
     },
 
     /* ======================
@@ -121,11 +140,12 @@ const authSlice = createSlice({
 
       state.tempEmail = null;
       state.pendingVerification = false;
-
       state.isAuthenticated = false;
 
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     },
 
     /* ======================
@@ -142,8 +162,7 @@ const authSlice = createSlice({
 ============================================================ */
 export const {
   setCredentials,
-  setTempEmail,
-  setPendingVerification,
+  setLoginPendingVerification,
   markVerified,
   updateUser,
   logout,
