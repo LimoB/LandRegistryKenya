@@ -1,38 +1,40 @@
-🇰🇪 LandRegistryKenya
+LandRegistryKenya
 
-A blockchain-powered land registry system that digitizes land ownership, verification, and transfer processes using Ethereum (Ganache), Express.js, PostgreSQL (Drizzle ORM), and IPFS storage.
+A blockchain-based land registry system that digitizes land ownership, verification, and transfer processes using Ethereum (Ganache), Express.js, PostgreSQL (Drizzle ORM), and IPFS storage.
 
-The system ensures transparent, tamper-proof land records, while keeping heavy business logic off-chain for scalability and low gas costs.
+The system provides a transparent and tamper-proof land record system while keeping heavy business logic off-chain to ensure scalability and reduced gas costs.
 
-🚀 Key Features
-🏡 Land Management
-Register land parcels with title deed upload (IPFS)
-Verify land ownership by government officers
-Store land metadata in PostgreSQL
-⛓️ Blockchain Integration
-Land minting on Ethereum smart contract
-Ownership transfer recorded on-chain
-Immutable ownership history
-🔄 Event-Driven Sync
+Key Features
+Land Management
+Register land parcels with title deed upload via IPFS
+Government officers can verify land ownership
+Land metadata stored securely in PostgreSQL
+Decentralized storage of documents using IPFS hashes
+Blockchain Integration
+Land registration (minting) executed via Ethereum smart contracts
+Ownership transfers recorded immutably on-chain
+Complete ownership history preserved on blockchain
+Event-Driven Synchronization
 Listens to smart contract events:
 LandRegistered
 OwnershipTransferred
-Automatically syncs blockchain → PostgreSQL
-Zero manual database updates required
-👤 Authentication System
-Role-based access:
+Automatically synchronizes blockchain data to PostgreSQL
+Eliminates manual database updates
+Authentication System
+Role-based access control:
 citizen
 land_officer
 admin
-JWT authentication middleware
-Email verification system
-💳 Off-chain Payments
-M-Pesa / Stripe handled off-chain (no gas costs)
-Verification tokens handled in backend only
-📦 File Storage
-IPFS integration for land documents
-Stores only hashes on-chain
-🏗️ Tech Stack
+JWT-based authentication middleware
+Email verification before account activation
+Off-chain Payments
+M-Pesa and Stripe integration handled off-chain
+No gas fees for payment processing
+Verification and transaction references stored in backend
+File Storage
+IPFS integration for land-related documents
+Only IPFS hashes stored on-chain for efficiency
+Tech Stack
 Backend
 Node.js
 Express.js
@@ -42,15 +44,15 @@ PostgreSQL
 Drizzle ORM
 Blockchain
 Solidity ^0.8.20
-Ganache / Ethereum local network
+Ethereum (Ganache / Local network)
 Ethers.js
 Storage
 IPFS (Pinata or local gateway)
 Authentication & Security
-JWT
-bcrypt
-Role-based middleware
-📁 Project Structure
+JWT authentication
+bcrypt password hashing
+Role-based authorization middleware
+Project Structure
 LandRegistryKenya/
 │
 ├── Backend/
@@ -80,19 +82,18 @@ LandRegistryKenya/
 │   └── 2_deploy_land.js
 │
 └── README.md
-⚙️ Installation
-1. Clone repository
-git clone https://github.com/your-username/LandRegistryKenya.git
+Installation
+1. Clone Repository
+git clone https://github.com/LimoB/LandRegistryKenya.git
 cd LandRegistryKenya
-2. Install dependencies
+2. Install Dependencies
 cd Backend
 npm install
-3. Setup environment variables
+3. Environment Variables
 
-Create .env file:
+Create a .env file:
 
 DATABASE_URL=postgresql://user:password@localhost:5432/landdb
-
 PORT=4000
 
 # Blockchain
@@ -109,15 +110,15 @@ CLIENT_URL=http://localhost:5173
 4. Run Ganache
 ganache
 
-or use Ganache GUI:
+Or use Ganache GUI:
 
 Port: 7545
-5. Deploy Smart Contract (Truffle)
+5. Deploy Smart Contract
 truffle compile
 truffle migrate --network ganache
-6. Start backend server
+6. Start Backend Server
 npm run dev
-⛓️ Smart Contract Overview
+Smart Contract Overview
 Land Registration
 function registerInitialLand(
     address owner,
@@ -130,59 +131,71 @@ function transferOwnership(
     address newOwner,
     string mpesaRef
 )
-Events (Used for DB Sync)
-event LandRegistered(uint landId, string lrNumber, address owner, string ipfsHash);
+Events
+event LandRegistered(
+    uint landId,
+    string lrNumber,
+    address owner,
+    string ipfsHash
+);
 
-event OwnershipTransferred(uint landId, address from, address to, string mpesaRef);
-🔄 Blockchain ↔ Database Sync
+event OwnershipTransferred(
+    uint landId,
+    address from,
+    address to,
+    string mpesaRef
+);
+Blockchain ↔ Database Synchronization
 
-The system automatically syncs blockchain events into PostgreSQL:
+The system automatically synchronizes blockchain events with PostgreSQL.
 
-Example flow:
+Flow:
 Officer verifies land in backend
 Backend calls smart contract
 Blockchain emits event
 Listener captures event
-PostgreSQL updated automatically
-🧠 Architecture Design
+PostgreSQL is updated automatically
+System Architecture
 Frontend → Backend API → PostgreSQL
                      ↓
               Ethereum Blockchain
                      ↓
            Event Listener (Sync Layer)
                      ↓
-             Auto DB Updates
-💡 Design Decisions
-✔ Why off-chain logic?
-Lower gas fees
-Faster processing
-Easier scaling
-✔ Why blockchain?
-Immutable ownership records
+             Automated Database Updates
+Design Decisions
+Off-chain Logic
+Reduces gas costs
+Improves system performance
+Enables scalability
+Blockchain Usage
+Immutable land ownership records
 Fraud prevention
-Transparent land history
-✔ Why event-driven sync?
-Ensures consistency
-Removes manual DB updates
-Real-time blockchain reflection
-🔐 Security
+Transparent transaction history
+Event-driven Architecture
+Ensures real-time consistency
+Eliminates manual synchronization
+Improves reliability
+Security
 JWT authentication
 Role-based access control
 Wallet-based ownership verification
 Email verification required before login
-Private keys stored in .env
-🧪 Future Improvements
- Add Graph indexer (The Graph Protocol)
- Multi-signature land officer approval
- Full audit dashboard
- IPFS decentralized pinning cluster
- Production blockchain (Polygon / Ethereum mainnet)
- Event replay system (for missed blocks)
-📜 License
+Private keys stored securely in environment variables
+Future Improvements
+Integration with The Graph Protocol
+Multi-signature approval for land officers
+Admin analytics dashboard
+Decentralized IPFS pinning cluster
+Production deployment on Polygon or Ethereum mainnet
+Event replay system for missed blockchain events
+License
 
 MIT License © 2026
 
-👨‍💻 Author
+Author
 
-Built as a Blockchain Land Registry System for Kenya
-Designed for secure, transparent, and tamper-proof land management.
+Boaz Limo (LimoB)
+Blockchain Land Registry System for Kenya
+
+Designed to ensure secure, transparent, and tamper-proof land management through blockchain technology.
