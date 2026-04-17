@@ -91,32 +91,28 @@ cd Backend
 npm install
 3. Environment Variables
 
-Create a .env file:
+Create .env file:
 
 DATABASE_URL=postgresql://user:password@localhost:5432/landdb
 PORT=4000
 
-# Blockchain
+
 BLOCKCHAIN_RPC_URL=http://127.0.0.1:7545
 LAND_REGISTRY_ADDRESS=your_contract_address
 OFFICER_PRIVATE_KEY=your_private_key
 
-# Email
+
 EMAIL_SENDER=your_email@gmail.com
 EMAIL_PASSWORD=your_app_password
 
-# Frontend
+
 CLIENT_URL=http://localhost:5173
 4. Run Ganache
 ganache
-
-Or use Ganache GUI:
-
-Port: 7545
 5. Deploy Smart Contract
 truffle compile
 truffle migrate --network ganache
-6. Start Backend Server
+6. Start Backend
 npm run dev
 Smart Contract Overview
 Land Registration
@@ -139,56 +135,51 @@ event LandRegistered(
     string ipfsHash
 );
 
+
 event OwnershipTransferred(
     uint landId,
     address from,
     address to,
     string mpesaRef
 );
-Blockchain ↔ Database Synchronization
-
-The system automatically synchronizes blockchain events with PostgreSQL.
+Blockchain ↔ Database Sync
 
 Flow:
+
 Officer verifies land in backend
 Backend calls smart contract
 Blockchain emits event
 Listener captures event
-PostgreSQL is updated automatically
-System Architecture
-Frontend → Backend API → PostgreSQL
-                     ↓
-              Ethereum Blockchain
-                     ↓
-           Event Listener (Sync Layer)
-                     ↓
-             Automated Database Updates
+PostgreSQL updates automatically
+Architecture
+
+Frontend → Backend API → PostgreSQL ↓ Ethereum Blockchain ↓ Event Listener (Sync Layer) ↓ Automated Database Updates
+
 Design Decisions
 Off-chain Logic
-Reduces gas costs
-Improves system performance
-Enables scalability
+Reduced gas costs
+Faster processing
+Better scalability
 Blockchain Usage
-Immutable land ownership records
+Immutable ownership records
 Fraud prevention
-Transparent transaction history
-Event-driven Architecture
-Ensures real-time consistency
-Eliminates manual synchronization
-Improves reliability
+Transparent history
+Event-driven Sync
+Real-time consistency
+No manual DB updates
 Security
 JWT authentication
 Role-based access control
-Wallet-based ownership verification
-Email verification required before login
-Private keys stored securely in environment variables
+Wallet verification
+Email verification before login
+Environment-secured private keys
 Future Improvements
-Integration with The Graph Protocol
-Multi-signature approval for land officers
+The Graph integration
+Multi-signature approvals
 Admin analytics dashboard
-Decentralized IPFS pinning cluster
-Production deployment on Polygon or Ethereum mainnet
-Event replay system for missed blockchain events
+IPFS pinning cluster
+Polygon / Ethereum mainnet deployment
+Event replay system
 License
 
 MIT License © 2026
@@ -196,6 +187,7 @@ MIT License © 2026
 Author
 
 Boaz Limo (LimoB)
+
 Blockchain Land Registry System for Kenya
 
-Designed to ensure secure, transparent, and tamper-proof land management through blockchain technology.
+Designed for secure, transparent, and tamper-proof land management.
