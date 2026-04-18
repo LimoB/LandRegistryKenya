@@ -1,8 +1,8 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Land } from "../../features/lands/landApi";
+import type { Land } from "./landApi";
 
 /* ================================
-   STATE TYPES
+   TYPES
 ================================ */
 type VerificationFilter =
   | "all"
@@ -10,31 +10,28 @@ type VerificationFilter =
   | "verified"
   | "rejected";
 
+/* ================================
+   STATE (UI ONLY)
+================================ */
 interface LandState {
-  lands: Land[];
   selectedLand: Land | null;
 
   filterByVerification: VerificationFilter;
 
   isRegisterModalOpen: boolean;
   isVerifyModalOpen: boolean;
-
-  isLoading: boolean;
 }
 
 /* ================================
    INITIAL STATE
 ================================ */
 const initialState: LandState = {
-  lands: [],
   selectedLand: null,
 
   filterByVerification: "all",
 
   isRegisterModalOpen: false,
   isVerifyModalOpen: false,
-
-  isLoading: false,
 };
 
 /* ================================
@@ -45,18 +42,10 @@ const landSlice = createSlice({
   initialState,
   reducers: {
     /* ======================
-       DATA HANDLING
+       SELECTION
     ====================== */
-    setLands: (state, action: PayloadAction<Land[]>) => {
-      state.lands = action.payload;
-    },
-
     setSelectedLand: (state, action: PayloadAction<Land | null>) => {
       state.selectedLand = action.payload;
-    },
-
-    setLandLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
     },
 
     /* ======================
@@ -80,8 +69,9 @@ const landSlice = createSlice({
       state.isRegisterModalOpen = false;
     },
 
-    openVerifyModal: (state) => {
+    openVerifyModal: (state, action: PayloadAction<Land>) => {
       state.isVerifyModalOpen = true;
+      state.selectedLand = action.payload;
     },
 
     closeVerifyModal: (state) => {
@@ -96,10 +86,11 @@ const landSlice = createSlice({
   },
 });
 
+/* ================================
+   EXPORTS
+================================ */
 export const {
-  setLands,
   setSelectedLand,
-  setLandLoading,
   setFilterByVerification,
 
   openRegisterModal,

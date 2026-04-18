@@ -1,6 +1,6 @@
 import React from "react";
 import { useSelector } from "react-redux";
-import { selectTempEmail } from "../app/slices/authSlice";
+import { selectTempEmail } from "../features/auth/authSlice";
 import { useResendVerificationMutation } from "../features/auth/authApi";
 import { Mail, RefreshCw, ArrowLeft, ShieldAlert, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";

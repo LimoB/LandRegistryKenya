@@ -4,7 +4,7 @@ import { useLoginMutation } from "../features/auth/authApi";
 import { useAppDispatch } from "../app/hooks";
 import {
   setLoginPendingVerification,
-} from "../app/slices/authSlice";
+} from "../features/auth/authSlice";
 import toast from "react-hot-toast";
 
 import {

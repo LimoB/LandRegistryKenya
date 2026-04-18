@@ -1,4 +1,4 @@
-import { baseApi } from "../../app/api/baseApi";
+import { baseApi } from "../../services/baseApi";
 
 /* ================================
    TYPES (MATCH BACKEND)
@@ -53,19 +53,14 @@ export interface RejectTransferPayload {
   reason: string;
 }
 
-export interface MpesaPaymentPayload {
-  amount: string;
-  mpesaCode: string;
-}
-
 /* ================================
-   TRANSFER API
+   API
 ================================ */
 export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ============================================================
-       1. CREATE TRANSFER REQUEST
+       CREATE TRANSFER
     ============================================================ */
     createTransfer: builder.mutation<
       { message: string; request: TransferRequest },
@@ -76,41 +71,57 @@ export const transferApi = baseApi.injectEndpoints({
         method: "POST",
         body,
       }),
-      invalidatesTags: ["Transfer"],
+
+      invalidatesTags: [{ type: "Transfer", id: "LIST" }],
     }),
 
     /* ============================================================
-       2. GET PENDING TRANSFERS (OFFICER)
+       GET PENDING TRANSFERS
     ============================================================ */
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
-      providesTags: ["Transfer"],
+
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((t) => ({
+                type: "Transfer" as const,
+                id: t.id,
+              })),
+              { type: "Transfer", id: "LIST" },
+            ]
+          : [{ type: "Transfer", id: "LIST" }],
     }),
 
     /* ============================================================
-       3. GET SINGLE TRANSFER
+       GET SINGLE TRANSFER
     ============================================================ */
     getTransferById: builder.query<TransferRequest, number>({
       query: (id) => `/transfers/${id}`,
-      providesTags: (_res, _err, id) => [{ type: "Transfer", id }],
+
+      providesTags: (_result, _error, id) => [
+        { type: "Transfer", id },
+      ],
     }),
 
     /* ============================================================
-       4. APPROVE TRANSFER (OFFICER)
+       APPROVE TRANSFER
     ============================================================ */
-    approveTransfer: builder.mutation<
-      { message: string },
-      number
-    >({
+    approveTransfer: builder.mutation<{ message: string }, number>({
       query: (id) => ({
         url: `/transfers/approve/${id}`,
         method: "PATCH",
       }),
-      invalidatesTags: ["Transfer"],
+
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Transfer", id },
+        { type: "Transfer", id: "LIST" },
+        { type: "Land", id: "LIST" },
+      ],
     }),
 
     /* ============================================================
-       5. REJECT TRANSFER (OFFICER)
+       REJECT TRANSFER
     ============================================================ */
     rejectTransfer: builder.mutation<
       { message: string },
@@ -121,11 +132,15 @@ export const transferApi = baseApi.injectEndpoints({
         method: "PATCH",
         body: { reason },
       }),
-      invalidatesTags: ["Transfer"],
+
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Transfer", id: arg.id },
+        { type: "Transfer", id: "LIST" },
+      ],
     }),
 
     /* ============================================================
-       6. MARK AS PAID (MPESA / STRIPE)
+       MARK AS PAID
     ============================================================ */
     markAsPaid: builder.mutation<
       { message: string },
@@ -139,11 +154,15 @@ export const transferApi = baseApi.injectEndpoints({
           reference,
         },
       }),
-      invalidatesTags: ["Transfer"],
+
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Transfer", id: arg.id },
+        { type: "Transfer", id: "LIST" },
+      ],
     }),
 
     /* ============================================================
-       7. FINALIZE TRANSFER (BLOCKCHAIN)
+       FINALIZE (BLOCKCHAIN)
     ============================================================ */
     finalizeTransfer: builder.mutation<
       { message: string; txHash: string },
@@ -153,15 +172,30 @@ export const transferApi = baseApi.injectEndpoints({
         url: `/transfers/finalize/${id}`,
         method: "PATCH",
       }),
-      invalidatesTags: ["Transfer", "Land"],
+
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Transfer", id },
+        { type: "Transfer", id: "LIST" },
+        { type: "Land", id: "LIST" },
+      ],
     }),
 
     /* ============================================================
-       8. GET MY SALES (SELLER VIEW)
+       SELLER SALES
     ============================================================ */
     getMySales: builder.query<TransferRequest[], number>({
       query: (sellerId) => `/transfers/seller/${sellerId}`,
-      providesTags: ["Transfer"],
+
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((t) => ({
+                type: "Transfer" as const,
+                id: t.id,
+              })),
+              { type: "Transfer", id: "LIST" },
+            ]
+          : [{ type: "Transfer", id: "LIST" }],
     }),
   }),
 });

@@ -1,4 +1,4 @@
-import { baseApi } from "../../app/api/baseApi";
+import { baseApi } from "../../services/baseApi";
 
 /* ================================
    TYPES
@@ -40,7 +40,17 @@ export const auditApi = baseApi.injectEndpoints({
     ====================== */
     getAuditLogs: builder.query<AuditResponse, void>({
       query: () => "/audit",
-      providesTags: ["Audit"],
+
+      providesTags: (result) =>
+        result
+          ? [
+              { type: "Audit" as const, id: "LIST" },
+              ...result.data.map((log) => ({
+                type: "Audit" as const,
+                id: log.id,
+              })),
+            ]
+          : [{ type: "Audit" as const, id: "LIST" }],
     }),
 
     /* ======================
@@ -55,7 +65,17 @@ export const auditApi = baseApi.injectEndpoints({
         method: "GET",
         params,
       }),
-      providesTags: ["Audit"],
+
+      providesTags: (result) =>
+        result
+          ? [
+              { type: "Audit" as const, id: "FILTERED" },
+              ...result.data.map((log) => ({
+                type: "Audit" as const,
+                id: log.id,
+              })),
+            ]
+          : [{ type: "Audit" as const, id: "FILTERED" }],
     }),
 
     /* ======================
@@ -63,7 +83,10 @@ export const auditApi = baseApi.injectEndpoints({
     ====================== */
     getAuditLogsByLand: builder.query<AuditResponse, number>({
       query: (landId) => `/audit/land/${landId}`,
-      providesTags: ["Audit"],
+
+      providesTags: (_result, _error, landId) => [
+        { type: "Audit" as const, id: `LAND-${landId}` },
+      ],
     }),
 
     /* ======================
@@ -71,7 +94,10 @@ export const auditApi = baseApi.injectEndpoints({
     ====================== */
     getAuditLogsByUser: builder.query<AuditResponse, number>({
       query: (userId) => `/audit/user/${userId}`,
-      providesTags: ["Audit"],
+
+      providesTags: (_result, _error, userId) => [
+        { type: "Audit" as const, id: `USER-${userId}` },
+      ],
     }),
   }),
 });

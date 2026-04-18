@@ -55,8 +55,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-
-      {/* PUBLIC ROUTES */}
+      {/* ================= PUBLIC ================= */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -69,18 +68,26 @@ const AppRoutes: React.FC = () => {
         <Route path="/verify-notice" element={<VerifyNotice />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-reset-code" element={<VerifyResetCode />} />
-
-        <Route path="/reset-password" element={<ComingSoon title="Reset Password" />} />
+        <Route
+          path="/reset-password"
+          element={<ComingSoon title="Reset Password" />}
+        />
       </Route>
 
-      {/* DASHBOARD REDIRECT */}
+      {/* ================= DASHBOARD REDIRECT ================= */}
       <Route
         path="/dashboard"
         element={
           <ProtectedRoute>
-            {user?.role === "admin" && <Navigate to="/admin/dashboard" replace />}
-            {user?.role === "land_officer" && <Navigate to="/officer/dashboard" replace />}
-            {user?.role === "citizen" && <Navigate to="/citizen/dashboard" replace />}
+            {user?.role === "admin" && (
+              <Navigate to="/admin/dashboard" replace />
+            )}
+            {user?.role === "land_officer" && (
+              <Navigate to="/officer/dashboard" replace />
+            )}
+            {user?.role === "citizen" && (
+              <Navigate to="/citizen/dashboard" replace />
+            )}
           </ProtectedRoute>
         }
       />
@@ -97,14 +104,24 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
+
         <Route path="dashboard" element={<CitizenDashboard />} />
         <Route path="my-lands" element={<MyLands />} />
         <Route path="register-land" element={<RegisterLand />} />
-        <Route path="transfer-land" element={<TransferLand />} />
+
+        {/* ✅ FIXED ROUTE (IMPORTANT) */}
+        <Route path="transfer" element={<TransferLand />} />
+
+        {/* Optional future-proof dynamic route */}
+        <Route path="transfer/:id" element={<TransferLand />} />
+
         <Route path="my-requests" element={<MyRequests />} />
 
-        {/* Coming soon features */}
-        <Route path="payments" element={<ComingSoon title="Payments" />} />
+        {/* Coming soon */}
+        <Route
+          path="payments"
+          element={<ComingSoon title="Payments" />}
+        />
         <Route path="wallet" element={<ComingSoon title="Wallet" />} />
         <Route path="profile" element={<ComingSoon title="Profile" />} />
       </Route>
@@ -121,6 +138,7 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
+
         <Route path="dashboard" element={<OfficerDashboard />} />
         <Route path="verify-lands" element={<VerifyLands />} />
         <Route path="transfers" element={<TransferApprovals />} />
@@ -141,6 +159,7 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
+
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="users" element={<UserManagement />} />
         <Route path="registry" element={<GlobalRegistry />} />
@@ -148,14 +167,26 @@ const AppRoutes: React.FC = () => {
         <Route path="transfers" element={<TransfersManagement />} />
         <Route path="audit-logs" element={<AuditLogs />} />
 
-        {/* Coming soon admin features */}
-        <Route path="payments" element={<ComingSoon title="Payments" />} />
-        <Route path="fraud" element={<ComingSoon title="Fraud Monitoring" />} />
-        <Route path="blockchain" element={<ComingSoon title="Blockchain Events" />} />
-        <Route path="idempotency" element={<ComingSoon title="Idempotency Keys" />} />
+        {/* Coming soon */}
+        <Route
+          path="payments"
+          element={<ComingSoon title="Payments" />}
+        />
+        <Route
+          path="fraud"
+          element={<ComingSoon title="Fraud Monitoring" />}
+        />
+        <Route
+          path="blockchain"
+          element={<ComingSoon title="Blockchain Events" />}
+        />
+        <Route
+          path="idempotency"
+          element={<ComingSoon title="Idempotency Keys" />}
+        />
       </Route>
 
-      {/* FALLBACK */}
+      {/* ================= FALLBACK ================= */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

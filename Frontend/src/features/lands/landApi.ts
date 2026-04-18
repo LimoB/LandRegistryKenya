@@ -1,4 +1,4 @@
-import { baseApi } from "../../app/api/baseApi";
+import { baseApi } from "../../services/baseApi";
 
 /* ================================
    TYPES (MATCH BACKEND STRICTLY)
@@ -50,7 +50,7 @@ export interface Land {
 }
 
 /* ================================
-   API WRAPPERS (BACKEND STYLE)
+   API RESPONSES
 ================================ */
 interface LandsResponse {
   success: boolean;
@@ -80,16 +80,22 @@ export interface RegisterLandPayload {
 ================================ */
 export const landApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-
     /* ======================
        GET ALL LANDS
     ====================== */
     getLands: builder.query<Land[], void>({
       query: () => "/lands",
-      transformResponse: (response: LandsResponse) => {
-        return response.data;
-      },
-      providesTags: ["Land"],
+
+      transformResponse: (response: LandsResponse): Land[] =>
+        response.data,
+
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map(({ id }) => ({ type: "Land" as const, id })),
+              { type: "Land", id: "LIST" },
+            ]
+          : [{ type: "Land", id: "LIST" }],
     }),
 
     /* ======================
@@ -97,10 +103,13 @@ export const landApi = baseApi.injectEndpoints({
     ====================== */
     getLandByLR: builder.query<Land, string>({
       query: (lrNumber) => `/lands/lr/${lrNumber}`,
-      transformResponse: (response: SingleLandResponse) => {
-        return response.data;
-      },
-      providesTags: (_result, _error, lr) => [{ type: "Land", id: lr }],
+
+      transformResponse: (response: SingleLandResponse): Land =>
+        response.data,
+
+      providesTags: (_result, _error, lrNumber) => [
+        { type: "Land", id: lrNumber },
+      ],
     }),
 
     /* ======================
@@ -126,7 +135,8 @@ export const landApi = baseApi.injectEndpoints({
           body: formData,
         };
       },
-      invalidatesTags: ["Land"],
+
+      invalidatesTags: [{ type: "Land", id: "LIST" }],
     }),
 
     /* ======================
@@ -140,7 +150,11 @@ export const landApi = baseApi.injectEndpoints({
         url: `/lands/verify/${id}`,
         method: "PATCH",
       }),
-      invalidatesTags: ["Land"],
+
+      invalidatesTags: (_result, _error, id) => [
+        { type: "Land", id },
+        { type: "Land", id: "LIST" },
+      ],
     }),
   }),
 });

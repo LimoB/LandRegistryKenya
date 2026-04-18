@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { User } from "../../features/users/userApi";
+import type { User } from "./userApi";
 
 /* ============================================================
    STATE TYPES
@@ -12,9 +12,11 @@ interface UserState {
   showProfileModal: boolean;
   showViewModal: boolean;
 
-  isLoading: boolean;
-  isFetching: boolean;
-  isSaving: boolean;
+  loading: {
+    fetch: boolean;
+    save: boolean;
+    global: boolean;
+  };
 }
 
 /* ============================================================
@@ -28,9 +30,11 @@ const initialState: UserState = {
   showProfileModal: false,
   showViewModal: false,
 
-  isLoading: false,
-  isFetching: false,
-  isSaving: false,
+  loading: {
+    fetch: false,
+    save: false,
+    global: false,
+  },
 };
 
 /* ============================================================
@@ -53,58 +57,53 @@ const userSlice = createSlice({
     },
 
     /* ======================
-       LOADING STATES (MORE GRANULAR)
+       LOADING STATES
     ====================== */
-    setUserLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
-    },
-
-    setUserFetching: (state, action: PayloadAction<boolean>) => {
-      state.isFetching = action.payload;
-    },
-
-    setUserSaving: (state, action: PayloadAction<boolean>) => {
-      state.isSaving = action.payload;
+    setUserLoading: (
+      state,
+      action: PayloadAction<{
+        type: keyof UserState["loading"];
+        value: boolean;
+      }>
+    ) => {
+      const { type, value } = action.payload;
+      state.loading[type] = value;
     },
 
     /* ======================
        MODALS CONTROL
     ====================== */
-    openEditModal: (state) => {
+    openEditModal: (state, action: PayloadAction<User | null>) => {
+      state.selectedUser = action.payload;
       state.showEditModal = true;
     },
     closeEditModal: (state) => {
       state.showEditModal = false;
+      state.selectedUser = null;
     },
 
-    openProfileModal: (state) => {
+    openProfileModal: (state, action: PayloadAction<User | null>) => {
+      state.selectedUser = action.payload;
       state.showProfileModal = true;
     },
     closeProfileModal: (state) => {
       state.showProfileModal = false;
+      state.selectedUser = null;
     },
 
-    openViewModal: (state) => {
+    openViewModal: (state, action: PayloadAction<User | null>) => {
+      state.selectedUser = action.payload;
       state.showViewModal = true;
     },
     closeViewModal: (state) => {
       state.showViewModal = false;
+      state.selectedUser = null;
     },
 
     /* ======================
-       SAFE STATE RESET
+       RESET STATE
     ====================== */
-    resetUserState: (state) => {
-      state.selectedUser = null;
-
-      state.showEditModal = false;
-      state.showProfileModal = false;
-      state.showViewModal = false;
-
-      state.isLoading = false;
-      state.isFetching = false;
-      state.isSaving = false;
-    },
+    resetUserState: () => initialState,
   },
 });
 
@@ -116,8 +115,6 @@ export const {
   setCurrentUser,
 
   setUserLoading,
-  setUserFetching,
-  setUserSaving,
 
   openEditModal,
   closeEditModal,

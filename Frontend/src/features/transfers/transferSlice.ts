@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { TransferRequest } from "../../features/transfers/transferApi";
+import type { TransferRequest } from "./transferApi";
 
 /* ================================
    STATE INTERFACE
@@ -13,10 +13,18 @@ interface TransferState {
   showRejectModal: boolean;
   showPaymentModal: boolean;
 
-  // UI STATE ONLY (NOT DATA LOADING)
-  actionLoading: boolean;
+  // ACTION STATES (granular instead of one boolean)
+  loading: {
+    initiate: boolean;
+    approve: boolean;
+    reject: boolean;
+    payment: boolean;
+  };
 }
 
+/* ================================
+   INITIAL STATE
+================================ */
 const initialState: TransferState = {
   selectedTransfer: null,
 
@@ -25,7 +33,12 @@ const initialState: TransferState = {
   showRejectModal: false,
   showPaymentModal: false,
 
-  actionLoading: false,
+  loading: {
+    initiate: false,
+    approve: false,
+    reject: false,
+    payment: false,
+  },
 };
 
 /* ================================
@@ -46,10 +59,17 @@ const transferSlice = createSlice({
     },
 
     /* ============================================================
-       ACTION LOADING (for button states only)
+       LOADING STATES (GRANULAR)
     ============================================================ */
-    setTransferActionLoading: (state, action: PayloadAction<boolean>) => {
-      state.actionLoading = action.payload;
+    setTransferLoading: (
+      state,
+      action: PayloadAction<{
+        type: keyof TransferState["loading"];
+        value: boolean;
+      }>
+    ) => {
+      const { type, value } = action.payload;
+      state.loading[type] = value;
     },
 
     /* ============================================================
@@ -65,7 +85,10 @@ const transferSlice = createSlice({
     /* ============================================================
        APPROVE MODAL
     ============================================================ */
-    openApproveModal: (state, action: PayloadAction<TransferRequest | null>) => {
+    openApproveModal: (
+      state,
+      action: PayloadAction<TransferRequest>
+    ) => {
       state.selectedTransfer = action.payload;
       state.showApproveModal = true;
     },
@@ -77,7 +100,10 @@ const transferSlice = createSlice({
     /* ============================================================
        REJECT MODAL
     ============================================================ */
-    openRejectModal: (state, action: PayloadAction<TransferRequest | null>) => {
+    openRejectModal: (
+      state,
+      action: PayloadAction<TransferRequest>
+    ) => {
       state.selectedTransfer = action.payload;
       state.showRejectModal = true;
     },
@@ -89,7 +115,10 @@ const transferSlice = createSlice({
     /* ============================================================
        PAYMENT MODAL
     ============================================================ */
-    openPaymentModal: (state, action: PayloadAction<TransferRequest | null>) => {
+    openPaymentModal: (
+      state,
+      action: PayloadAction<TransferRequest>
+    ) => {
       state.selectedTransfer = action.payload;
       state.showPaymentModal = true;
     },
@@ -99,7 +128,7 @@ const transferSlice = createSlice({
     },
 
     /* ============================================================
-       RESET ALL UI STATE
+       RESET ALL STATE
     ============================================================ */
     resetTransferState: () => initialState,
   },
@@ -110,7 +139,7 @@ const transferSlice = createSlice({
 ================================ */
 export const {
   setSelectedTransfer,
-  setTransferActionLoading,
+  setTransferLoading,
 
   openInitiateModal,
   closeInitiateModal,
@@ -128,7 +157,7 @@ export const {
 } = transferSlice.actions;
 
 /* ================================
-   SELECTORS (OPTIONAL BUT CLEAN)
+   SELECTORS
 ================================ */
 export const selectSelectedTransfer = (state: {
   transfer: TransferState;
@@ -143,8 +172,8 @@ export const selectTransferModals = (state: {
   payment: state.transfer.showPaymentModal,
 });
 
-export const selectTransferActionLoading = (state: {
+export const selectTransferLoading = (state: {
   transfer: TransferState;
-}) => state.transfer.actionLoading;
+}) => state.transfer.loading;
 
 export default transferSlice.reducer;

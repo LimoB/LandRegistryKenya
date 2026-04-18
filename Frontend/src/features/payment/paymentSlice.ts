@@ -1,19 +1,19 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Payment } from "../../features/payment/paymentApi";
+import type { Payment } from "./paymentApi";
 
 /* ============================================================
-   STATE
+   STATE (UI ONLY)
 ============================================================ */
 interface PaymentState {
   selectedPayment: Payment | null;
   lastStripeSessionId: string | null;
-  loading: boolean;
+  isStripeRedirecting: boolean;
 }
 
 const initialState: PaymentState = {
   selectedPayment: null,
   lastStripeSessionId: null,
-  loading: false,
+  isStripeRedirecting: false,
 };
 
 /* ============================================================
@@ -23,23 +23,43 @@ const paymentSlice = createSlice({
   name: "payment",
   initialState,
   reducers: {
-    
-    setSelectedPayment: (state, action: PayloadAction<Payment | null>) => {
+    /* ======================
+       SELECTION
+    ====================== */
+    setSelectedPayment: (
+      state,
+      action: PayloadAction<Payment | null>
+    ) => {
       state.selectedPayment = action.payload;
     },
 
-    setLastStripeSessionId: (state, action: PayloadAction<string>) => {
+    /* ======================
+       STRIPE SESSION TRACKING
+    ====================== */
+    setLastStripeSessionId: (
+      state,
+      action: PayloadAction<string>
+    ) => {
       state.lastStripeSessionId = action.payload;
     },
 
-    setPaymentLoading: (state, action: PayloadAction<boolean>) => {
-      state.loading = action.payload;
+    /* ======================
+       STRIPE REDIRECT STATE
+    ====================== */
+    setStripeRedirecting: (
+      state,
+      action: PayloadAction<boolean>
+    ) => {
+      state.isStripeRedirecting = action.payload;
     },
 
+    /* ======================
+       RESET
+    ====================== */
     resetPaymentState: (state) => {
       state.selectedPayment = null;
       state.lastStripeSessionId = null;
-      state.loading = false;
+      state.isStripeRedirecting = false;
     },
   },
 });
@@ -50,7 +70,7 @@ const paymentSlice = createSlice({
 export const {
   setSelectedPayment,
   setLastStripeSessionId,
-  setPaymentLoading,
+  setStripeRedirecting,
   resetPaymentState,
 } = paymentSlice.actions;
 

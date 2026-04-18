@@ -1,7 +1,7 @@
 import React from "react";
 import { useGetUsersQuery, useDeleteUserMutation, useUpdateUserMutation, type User } from "../../features/users/userApi";
 import { useAppDispatch } from "../../app/hooks";
-import { setSelectedUser, openEditModal } from "../../app/slices/userSlice";
+import { setSelectedUser, openEditModal } from "../../features/users/userSlice";
 import { 
   Users, 
   ShieldCheck, 

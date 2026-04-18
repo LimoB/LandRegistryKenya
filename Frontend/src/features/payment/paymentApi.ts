@@ -1,10 +1,16 @@
-import { baseApi } from "../../app/api/baseApi";
+import { baseApi } from "../../services/baseApi";
 
 /* ============================================================
    TYPES
 ============================================================ */
 export type PaymentMethod = "stripe" | "mpesa";
 export type PaymentStatus = "pending" | "completed" | "failed";
+
+export interface TransferRequest {
+  id: number;
+  lrNumber?: string;
+  status?: string;
+}
 
 export interface Payment {
   id: number;
@@ -20,7 +26,7 @@ export interface Payment {
   createdAt: string;
   updatedAt?: string;
 
-  transferRequest?: Record<string, unknown>; // backend includes relation
+  transferRequest?: TransferRequest;
 }
 
 export interface StripeCheckoutResponse {
@@ -29,7 +35,7 @@ export interface StripeCheckoutResponse {
 }
 
 /* ============================================================
-   PAYMENT API
+   API
 ============================================================ */
 export const paymentApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -46,6 +52,10 @@ export const paymentApi = baseApi.injectEndpoints({
         method: "POST",
         body: data,
       }),
+
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Payment", id: arg.transferId },
+      ],
     }),
 
     /* ======================
@@ -64,6 +74,10 @@ export const paymentApi = baseApi.injectEndpoints({
         method: "POST",
         body: data,
       }),
+
+      invalidatesTags: (_result, _error, arg) => [
+        { type: "Payment", id: arg.transferId },
+      ],
     }),
 
     /* ======================
@@ -71,6 +85,10 @@ export const paymentApi = baseApi.injectEndpoints({
     ====================== */
     getPaymentByTransfer: builder.query<Payment, number>({
       query: (transferId) => `/payments/transfer/${transferId}`,
+
+      providesTags: (_result, _error, transferId) => [
+        { type: "Payment", id: transferId },
+      ],
     }),
 
     /* ======================
@@ -78,6 +96,17 @@ export const paymentApi = baseApi.injectEndpoints({
     ====================== */
     getAllPayments: builder.query<Payment[], void>({
       query: () => "/payments",
+
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((p) => ({
+                type: "Payment" as const,
+                id: p.id,
+              })),
+              { type: "Payment", id: "LIST" },
+            ]
+          : [{ type: "Payment", id: "LIST" }],
     }),
   }),
 });

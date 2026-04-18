@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
-import { logout } from "../app/slices/authSlice";
+import { logout } from "../features/auth/authSlice";
 import ThemeToggle from "../components/ThemeToggle";
 
 import {
@@ -76,19 +76,17 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         { name: "Verify Lands", path: "/officer/verify-lands", icon: FileSearch },
         { name: "Transfers", path: "/officer/transfers", icon: CheckSquare },
       ],
-      tools: [
-        { name: "Search", path: "/officer/search", icon: Search },
-      ],
+      tools: [{ name: "Search", path: "/officer/search", icon: Search }],
     },
 
     citizen: {
-      overview: [
-        { name: "Dashboard", path: "/citizen/dashboard", icon: Home },
-      ],
+      overview: [{ name: "Dashboard", path: "/citizen/dashboard", icon: Home }],
       property: [
         { name: "My Lands", path: "/citizen/my-lands", icon: Database },
         { name: "Register", path: "/citizen/register-land", icon: PlusCircle },
-        { name: "Transfer", path: "/citizen/transfer-land", icon: ArrowRightLeft },
+
+        // ✅ FIXED PATH (THIS WAS THE BUG)
+        { name: "Transfer", path: "/citizen/transfer", icon: ArrowRightLeft },
       ],
       finance: [
         { name: "Payments", path: "/citizen/payments", icon: History },
@@ -160,7 +158,6 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
       {/* USER PANEL */}
       <div className="border-t border-border/40 p-3">
 
-        {/* USER BUTTON */}
         <button
           onClick={() => setOpenUserMenu(!openUserMenu)}
           className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition"
@@ -181,7 +178,6 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
           <ChevronDown size={14} className="text-text/40" />
         </button>
 
-        {/* DROPDOWN */}
         {openUserMenu && (
           <div className="mt-2 bg-card border border-border/40 rounded-lg p-1 space-y-1">
 
@@ -203,7 +199,6 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
           </div>
         )}
 
-        {/* FOOTER */}
         <div className="mt-3 flex items-center justify-between text-[10px] text-text/40">
           <div className="flex items-center gap-1">
             <Globe size={10} />

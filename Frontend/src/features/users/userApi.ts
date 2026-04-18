@@ -1,4 +1,4 @@
-import { baseApi } from "../../app/api/baseApi";
+import { baseApi } from "../../services/baseApi";
 
 /* ============================================================
    TYPES (MATCH BACKEND RELATIONS)
@@ -32,7 +32,7 @@ export interface Request {
 }
 
 /* ================================
-   USER (FULL BACKEND SHAPE)
+   USER
 ================================ */
 export interface User {
   id: number;
@@ -45,7 +45,6 @@ export interface User {
   isVerified: boolean;
   createdAt: string;
 
-  /* RELATIONS FROM BACKEND */
   ownedLands?: LandMini[];
   sentRequests?: Request[];
   receivedRequests?: Request[];
@@ -80,37 +79,45 @@ export const userApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ======================
-       GET ALL USERS (ADMIN/OFFICER)
+       GET ALL USERS
     ====================== */
     getUsers: builder.query<User[], void>({
       query: () => "/users",
+
       providesTags: (result) =>
         result
           ? [
-              { type: "User", id: "LIST" },
-              ...result.map((u) => ({ type: "User" as const, id: u.id })),
+              { type: "User" as const, id: "LIST" },
+              ...result.map((u) => ({
+                type: "User" as const,
+                id: u.id,
+              })),
             ]
-          : [{ type: "User", id: "LIST" }],
+          : [{ type: "User" as const, id: "LIST" }],
     }),
 
     /* ======================
-       GET USER BY ID (FULL RELATIONS)
+       GET USER BY ID
     ====================== */
     getUserById: builder.query<User, number>({
       query: (id) => `/users/${id}`,
-      providesTags: (_res, _err, id) => [{ type: "User", id }],
+
+      providesTags: (_result, _error, id) => [
+        { type: "User" as const, id },
+      ],
     }),
 
     /* ======================
-       GET CURRENT USER (ME)
+       GET CURRENT USER
     ====================== */
     getMe: builder.query<User, void>({
       query: () => "/users/me",
-      providesTags: [{ type: "User", id: "ME" }],
+
+      providesTags: [{ type: "User" as const, id: "ME" }],
     }),
 
     /* ======================
-       ADMIN UPDATE USER (AUDIT LOGGED)
+       UPDATE USER (ADMIN)
     ====================== */
     updateUser: builder.mutation<
       { message: string; user: User },
@@ -121,25 +128,27 @@ export const userApi = baseApi.injectEndpoints({
         method: "PUT",
         body: payload,
       }),
-      invalidatesTags: (_res, _err, { id }) => [
-        { type: "User", id },
-        { type: "User", id: "LIST" },
+
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: "User" as const, id },
+        { type: "User" as const, id: "LIST" },
       ],
     }),
 
     /* ======================
-       DELETE USER (AUDIT LOGGED)
+       DELETE USER
     ====================== */
     deleteUser: builder.mutation<{ message: string }, number>({
       query: (id) => ({
         url: `/users/${id}`,
         method: "DELETE",
       }),
-      invalidatesTags: [{ type: "User", id: "LIST" }],
+
+      invalidatesTags: [{ type: "User" as const, id: "LIST" }],
     }),
 
     /* ======================
-       UPDATE PROFILE (SELF ONLY)
+       UPDATE PROFILE (SELF)
     ====================== */
     updateProfile: builder.mutation<
       { message: string; user: User },
@@ -150,7 +159,8 @@ export const userApi = baseApi.injectEndpoints({
         method: "PUT",
         body: payload,
       }),
-      invalidatesTags: [{ type: "User", id: "ME" }],
+
+      invalidatesTags: [{ type: "User" as const, id: "ME" }],
     }),
   }),
 });

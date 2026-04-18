@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useRegisterMutation } from "../features/auth/authApi";
 import { useNavigate, Link } from "react-router-dom";
 import { useAppDispatch } from "../app/hooks";
-import { setLoginPendingVerification } from "../app/slices/authSlice";
+import { setLoginPendingVerification } from "../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
 

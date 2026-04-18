@@ -4,6 +4,7 @@ export const tagTypes = [
   "Transfer",
   "Auth",
   "Audit",
+  "Payment",
 ] as const;
 
 export type TagType = (typeof tagTypes)[number];
