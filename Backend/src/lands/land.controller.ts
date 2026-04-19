@@ -3,14 +3,25 @@ import {
   getAllLandsService,
   createLandService,
   verifyLandService,
-  getLandByLRService
+  getLandByLRService,
+  listLandForSaleService,
+  removeLandFromSaleService,
+  getMarketplaceLandsService,
+  getMyLandsService
 } from "./land.service";
 
 import { uploadToIPFS } from "../utils/ipfs";
 
-/* ================================
+/* ============================================================
+   SAFE USER ID
+============================================================ */
+const getUserId = (req: Request): number | null => {
+  return (req as any)?.user?.userId || null;
+};
+
+/* ============================================================
    GET ALL LANDS
-================================ */
+============================================================ */
 export const getLands = async (_req: Request, res: Response) => {
   try {
     const data = await getAllLandsService();
@@ -28,14 +39,12 @@ export const getLands = async (_req: Request, res: Response) => {
   }
 };
 
-/* ================================
+/* ============================================================
    GET LAND BY LR NUMBER
-================================ */
+============================================================ */
 export const getLandByLR = async (req: Request, res: Response) => {
   try {
     const lrParam = req.params.lrNumber;
-
-    // ✅ Normalize to string
     const lrNumber = Array.isArray(lrParam) ? lrParam[0] : lrParam;
 
     if (!lrNumber) {
@@ -67,12 +76,12 @@ export const getLandByLR = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
-   REGISTER LAND (Citizen)
-================================ */
+/* ============================================================
+   REGISTER LAND
+============================================================ */
 export const registerLand = async (req: Request, res: Response) => {
   try {
-    const ownerId = (req as any).user?.userId;
+    const ownerId = getUserId(req);
     const file = req.file;
 
     if (!ownerId) {
@@ -98,7 +107,6 @@ export const registerLand = async (req: Request, res: Response) => {
       priceInKsh
     } = req.body;
 
-    /* ================= VALIDATION ================= */
     if (!lrNumber || !county || !constituency || !sizeInAcres || !landType) {
       return res.status(400).json({
         success: false,
@@ -114,13 +122,11 @@ export const registerLand = async (req: Request, res: Response) => {
     }
 
     /* ================= IPFS ================= */
-    console.log("📡 Uploading deed to IPFS...");
     const ipfsHash = await uploadToIPFS(
       file.buffer,
       `TITLE_${lrNumber}.pdf`
     );
 
-    /* ================= CREATE LAND ================= */
     const land = await createLandService({
       ownerId,
       lrNumber,
@@ -147,12 +153,12 @@ export const registerLand = async (req: Request, res: Response) => {
   }
 };
 
-/* ================================
-   VERIFY LAND (Officer)
-================================ */
+/* ============================================================
+   VERIFY LAND
+============================================================ */
 export const verifyLand = async (req: Request, res: Response) => {
   try {
-    const officerId = (req as any).user?.userId;
+    const officerId = getUserId(req);
 
     if (!officerId) {
       return res.status(401).json({
@@ -175,6 +181,150 @@ export const verifyLand = async (req: Request, res: Response) => {
     const status = error.message?.includes("Blockchain") ? 500 : 400;
 
     res.status(status).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/* ============================================================
+   LIST LAND FOR SALE
+============================================================ */
+export const listLandForSale = async (req: Request, res: Response) => {
+  try {
+    const ownerId = getUserId(req);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        error: "Unauthorized"
+      });
+    }
+
+    const landId = Number(req.params.id);
+    const { priceInKsh } = req.body;
+
+    if (isNaN(landId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid land ID"
+      });
+    }
+
+    if (!priceInKsh || Number(priceInKsh) <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Valid price required"
+      });
+    }
+
+    const result = await listLandForSaleService(
+      ownerId,
+      landId,
+      Number(priceInKsh)
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Land listed for sale",
+      data: result
+    });
+
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/* ============================================================
+   REMOVE FROM SALE
+============================================================ */
+export const removeLandFromSale = async (req: Request, res: Response) => {
+  try {
+    const ownerId = getUserId(req);
+
+    if (!ownerId) {
+      return res.status(401).json({
+        success: false,
+        error: "Unauthorized"
+      });
+    }
+
+    const landId = Number(req.params.id);
+
+    if (isNaN(landId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid land ID"
+      });
+    }
+
+    const result = await removeLandFromSaleService(
+      ownerId,
+      landId
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Land removed from sale",
+      data: result
+    });
+
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/* ============================================================
+   MARKETPLACE (BUYERS VIEW)
+============================================================ */
+export const getMarketplaceLands = async (_req: Request, res: Response) => {
+  try {
+    const data = await getMarketplaceLandsService();
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/* ============================================================
+   MY LANDS (CITIZEN DASHBOARD)
+============================================================ */
+export const getMyLands = async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        error: "Unauthorized"
+      });
+    }
+
+    const data = await getMyLandsService(userId);
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
       success: false,
       error: error.message
     });

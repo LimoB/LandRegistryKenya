@@ -2,31 +2,64 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRegisterLandMutation } from "../../features/lands/landApi";
 import Button from "../../components/Button";
-import { 
-  PlusCircle, 
-  Upload, 
-  FileText, 
-  CheckCircle2, 
-  AlertCircle, 
-  MapPin, 
+
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  MapPin,
   Maximize,
-  ArrowRight
+  ArrowRight,
 } from "lucide-react";
 
+/* ================================
+   TYPES (NO ANY HERE)
+================================ */
+type LandType = "agricultural" | "residential" | "commercial" | "industrial";
+
+interface FormState {
+  lrNumber: string;
+  county: string;
+  constituency: string;
+  sizeInAcres: string;
+  landType: LandType;
+}
+
+/* ================================
+   MAIN COMPONENT
+================================ */
 const RegisterLand: React.FC = () => {
   const navigate = useNavigate();
-  const [registerLand, { isLoading, isSuccess, error }] = useRegisterLandMutation();
-  
-  // Form State
-  const [formData, setFormData] = useState({
+  const [registerLand, { isLoading, isSuccess, error }] =
+    useRegisterLandMutation();
+
+  const [formData, setFormData] = useState<FormState>({
     lrNumber: "",
     county: "",
     constituency: "",
     sizeInAcres: "",
-    landType: "agricultural" as const,
+    landType: "agricultural",
   });
+
   const [file, setFile] = useState<File | null>(null);
 
+  /* ================================
+     HANDLE INPUT CHANGE
+  ================================ */
+  const handleChange = <K extends keyof FormState>(
+    key: K,
+    value: FormState[K]
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  /* ================================
+     SUBMIT
+  ================================ */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) return;
@@ -37,80 +70,98 @@ const RegisterLand: React.FC = () => {
         sizeInAcres: parseFloat(formData.sizeInAcres),
         document: file,
       }).unwrap();
-      
-      // Navigate to "My Properties" after a short delay on success
-      setTimeout(() => navigate("/citizen/my-lands"), 3000);
+
+      setTimeout(() => navigate("/citizen/my-lands"), 2000);
     } catch (err) {
-      console.error("Registration failed:", err);
+      console.error("Failed:", err);
     }
   };
 
+  /* ================================
+     SUCCESS SCREEN
+  ================================ */
   if (isSuccess) return <SuccessState />;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+
+      {/* HEADER */}
       <div>
-        <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-          Register New Land
-        </h1>
-        <p className="text-slate-500 font-medium mt-1">
-          Submit your property details for blockchain minting and ministry verification.
+        <h1 className="text-3xl font-black">Register Your Land</h1>
+        <p className="text-slate-500 text-sm mt-1">
+          Fill in correct details. This will be stored on the registry system.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* Left Side: Text Details */}
+      {/* FORM */}
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 md:grid-cols-2 gap-8"
+      >
+
+        {/* LEFT */}
         <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-6 rounded-2xl space-y-5">
-            <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
-              <MapPin size={14} /> Property Location
+
+          {/* LOCATION */}
+          <section className="p-6 border rounded-2xl bg-white dark:bg-slate-900">
+            <h3 className="text-xs font-bold flex items-center gap-2 text-blue-600 mb-4">
+              <MapPin size={14} />
+              Location Details
             </h3>
-            
+
             <div className="space-y-4">
-              <InputField 
-                label="LR Number (Title Number)"
+              <InputField
+                label="LR Number"
                 placeholder="e.g. NAI/KAM/1234"
                 value={formData.lrNumber}
-                onChange={(v: any) => setFormData({...formData, lrNumber: v})}
+                onChange={(v) => handleChange("lrNumber", v)}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <InputField 
+
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
                   label="County"
                   placeholder="e.g. Nairobi"
                   value={formData.county}
-                  onChange={(v: any) => setFormData({...formData, county: v})}
+                  onChange={(v) => handleChange("county", v)}
                 />
-                <InputField 
+
+                <InputField
                   label="Constituency"
                   placeholder="e.g. Kasarani"
                   value={formData.constituency}
-                  onChange={(v: any) => setFormData({...formData, constituency: v})}
+                  onChange={(v) => handleChange("constituency", v)}
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-6 rounded-2xl space-y-5">
-            <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
-              <Maximize size={14} /> Land Specifications
+          {/* LAND INFO */}
+          <section className="p-6 border rounded-2xl bg-white dark:bg-slate-900">
+            <h3 className="text-xs font-bold flex items-center gap-2 text-blue-600 mb-4">
+              <Maximize size={14} />
+              Land Details
             </h3>
-            
+
             <div className="space-y-4">
-              <InputField 
+              <InputField
                 label="Size (Acres)"
                 type="number"
                 placeholder="0.00"
                 value={formData.sizeInAcres}
-                onChange={(v: any) => setFormData({...formData, sizeInAcres: v})}
+                onChange={(v) => handleChange("sizeInAcres", v)}
               />
+
               <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 ml-1">Land Use Type</label>
-                <select 
-                  className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none ring-1 ring-slate-100 dark:ring-slate-800 focus:ring-2 focus:ring-blue-500 transition-all"
+                <label className="text-xs font-bold text-slate-500">
+                  Land Type
+                </label>
+
+                <select
                   value={formData.landType}
-                  onChange={(e) => setFormData({...formData, landType: e.target.value as any})}
+                  onChange={(e) =>
+                    handleChange("landType", e.target.value as LandType)
+                  }
+                  className="w-full mt-1 p-3 rounded-xl border bg-slate-50 dark:bg-slate-950"
                 >
                   <option value="agricultural">Agricultural</option>
                   <option value="residential">Residential</option>
@@ -119,109 +170,117 @@ const RegisterLand: React.FC = () => {
                 </select>
               </div>
             </div>
-          </div>
+          </section>
         </div>
 
-        {/* Right Side: File Upload */}
-        <div className="space-y-6">
-          <div className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 p-6 rounded-2xl h-full flex flex-col">
-            <h3 className="text-xs font-black uppercase tracking-widest text-blue-600 flex items-center gap-2 mb-5">
-              <FileText size={14} /> Title Deed (PDF)
-            </h3>
-            
-            <div 
-              className={`flex-1 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center p-8 transition-all ${
-                file ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-slate-200 dark:border-slate-800 hover:border-blue-500/50'
-              }`}
-            >
-              <input 
-                type="file" 
-                id="doc-upload"
-                hidden 
-                accept=".pdf"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
-              
-              {file ? (
-                <div className="text-center space-y-3">
-                   <div className="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mx-auto shadow-lg">
-                      <FileText size={32} />
-                   </div>
-                   <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{file.name}</p>
-                   <button 
-                    type="button"
-                    onClick={() => setFile(null)}
-                    className="text-[10px] font-black uppercase text-red-500 hover:underline"
-                   >
-                    Remove File
-                   </button>
-                </div>
-              ) : (
-                <label htmlFor="doc-upload" className="text-center cursor-pointer group">
-                  <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 rounded-2xl flex items-center justify-center mx-auto transition-all mb-4">
-                    <Upload size={32} />
-                  </div>
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Click to upload PDF</p>
-                  <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold tracking-tighter">Max file size: 10MB</p>
-                </label>
-              )}
-            </div>
+        {/* RIGHT */}
+        <div className="p-6 border rounded-2xl bg-white dark:bg-slate-900 flex flex-col">
 
-            {error && (
-              <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-2 text-red-500">
-                <AlertCircle size={16} />
-                <p className="text-[10px] font-bold uppercase">Submission Failed. Check inputs.</p>
-              </div>
+          <h3 className="text-xs font-bold flex items-center gap-2 text-blue-600 mb-4">
+            <FileText size={14} />
+            Upload Title Deed
+          </h3>
+
+          <div
+            className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center p-6 text-center ${
+              file ? "border-green-500" : "border-slate-300"
+            }`}
+          >
+            <input
+              type="file"
+              accept=".pdf"
+              hidden
+              id="file"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            />
+
+            {file ? (
+              <>
+                <FileText className="text-green-500" size={40} />
+                <p className="text-sm mt-2 font-bold">{file.name}</p>
+
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  className="text-xs text-red-500 mt-2"
+                >
+                  Remove file
+                </button>
+              </>
+            ) : (
+              <label htmlFor="file" className="cursor-pointer">
+                <Upload size={40} className="text-slate-400 mx-auto" />
+                <p className="text-sm mt-2">Click to upload PDF</p>
+              </label>
             )}
-
-            <Button 
-              type="submit"
-              disabled={isLoading || !file}
-              className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-black uppercase tracking-[0.15em] flex items-center justify-center gap-3 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20"
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <PlusCircle size={20} />
-                  Submit to Registry
-                </>
-              )}
-            </Button>
           </div>
+
+          {/* ERROR */}
+          {error && (
+            <div className="mt-4 flex items-center gap-2 text-red-500 text-xs">
+              <AlertCircle size={14} />
+              Something went wrong. Please try again.
+            </div>
+          )}
+
+          {/* SUBMIT */}
+          <Button
+            type="submit"
+            disabled={isLoading || !file}
+            className="mt-6 w-full bg-blue-600 text-white py-3 rounded-xl font-bold"
+          >
+            {isLoading ? "Submitting..." : "Submit Land"}
+          </Button>
         </div>
       </form>
     </div>
   );
 };
 
-/* --- Minimalist Components --- */
+/* ================================
+   INPUT (NO ANY TYPE)
+================================ */
+interface InputProps {
+  label: string;
+  value: string;
+  placeholder?: string;
+  type?: string;
+  onChange: (value: string) => void;
+}
 
-const InputField = ({ label, placeholder, value, onChange, type = "text" }: any) => (
-  <div>
-    <label className="block text-[10px] font-black uppercase text-slate-400 mb-1.5 ml-1 tracking-widest">{label}</label>
-    <input 
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      required
-      className="w-full bg-slate-50 dark:bg-slate-950 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-200 outline-none ring-1 ring-slate-100 dark:ring-slate-800 focus:ring-2 focus:ring-blue-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700"
-    />
-  </div>
-);
-
-const SuccessState = () => (
-  <div className="flex flex-col items-center justify-center py-20 animate-in zoom-in-95 duration-500 text-center">
-    <div className="w-20 h-20 bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl shadow-emerald-500/40 mb-6">
-      <CheckCircle2 size={48} />
+const InputField: React.FC<InputProps> = ({
+  label,
+  value,
+  placeholder,
+  type = "text",
+  onChange,
+}) => {
+  return (
+    <div>
+      <label className="text-xs font-bold text-slate-500">{label}</label>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full mt-1 p-3 border rounded-xl bg-slate-50 dark:bg-slate-950"
+      />
     </div>
-    <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Application Submitted!</h2>
-    <p className="text-slate-500 font-medium max-w-sm mt-2">
-      Your land details have been uploaded to IPFS and a verification request has been sent to the Land Officer.
+  );
+};
+
+/* ================================
+   SUCCESS UI
+================================ */
+const SuccessState = () => (
+  <div className="text-center py-20 space-y-4">
+    <CheckCircle2 className="text-green-500 mx-auto" size={50} />
+    <h2 className="text-2xl font-bold">Land Submitted Successfully</h2>
+    <p className="text-slate-500">
+      Your land is now being verified by the registry.
     </p>
-    <div className="mt-8 flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest animate-pulse">
-      Redirecting to portfolio <ArrowRight size={14} />
+    <div className="text-blue-600 text-sm flex items-center justify-center gap-2">
+      Redirecting <ArrowRight size={14} />
     </div>
   </div>
 );

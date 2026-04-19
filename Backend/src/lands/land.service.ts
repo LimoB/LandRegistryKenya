@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and, desc, ne } from "drizzle-orm";
 import db from "../drizzle/db";
 import {
   auditLogs,
@@ -13,7 +13,7 @@ import {
 export type TLandInsert = typeof lands.$inferInsert;
 
 /* ============================================================
-   GET ALL LANDS
+   GET ALL LANDS (ADMIN / OFFICER VIEW)
 ============================================================ */
 export const getAllLandsService = async () => {
   return await db.query.lands.findMany({
@@ -32,7 +32,7 @@ export const getAllLandsService = async () => {
 };
 
 /* ============================================================
-   CREATE LAND (CITIZEN REGISTRATION)
+   CREATE LAND
 ============================================================ */
 export const createLandService = async (landData: TLandInsert) => {
   if (!landData.ownerId) throw new Error("Owner is required");
@@ -48,12 +48,10 @@ export const createLandService = async (landData: TLandInsert) => {
 
   const [newLand] = await db.insert(lands).values({
     ...landData,
-    verificationStatus: "pending"
+    verificationStatus: "pending",
+    isForSale: false
   }).returning();
 
-  /* ============================================================
-     INITIAL OWNERSHIP RECORD
-  ============================================================ */
   await db.insert(landOwnershipHistory).values({
     landId: newLand.id,
     fromOwnerId: null,
@@ -62,9 +60,6 @@ export const createLandService = async (landData: TLandInsert) => {
     toWallet: null
   });
 
-  /* ============================================================
-     AUDIT LOG
-  ============================================================ */
   await db.insert(auditLogs).values({
     actionType: "LAND_CREATED",
     performedBy: newLand.ownerId,
@@ -78,7 +73,7 @@ export const createLandService = async (landData: TLandInsert) => {
 };
 
 /* ============================================================
-   GET LAND BY LR NUMBER
+   GET LAND BY LR
 ============================================================ */
 export const getLandByLRService = async (lrNumber: string) => {
   return await db.query.lands.findFirst({
@@ -92,7 +87,7 @@ export const getLandByLRService = async (lrNumber: string) => {
 };
 
 /* ============================================================
-   VERIFY LAND (OFFICER + BLOCKCHAIN MINT)
+   VERIFY LAND (OFFICER + BLOCKCHAIN)
 ============================================================ */
 export const verifyLandService = async (
   landId: number,
@@ -113,16 +108,10 @@ export const verifyLandService = async (
     throw new Error("Owner wallet missing");
   }
 
-  /* ============================================================
-     IDEMPOTENCY CHECK
-  ============================================================ */
   if (land.blockchainTxHash) {
-    throw new Error("Land already minted on blockchain");
+    throw new Error("Already minted on blockchain");
   }
 
-  /* ============================================================
-     BLOCKCHAIN MINT (via service layer)
-  ============================================================ */
   let receipt;
   try {
     receipt = await registerLandOnChainService(
@@ -134,19 +123,13 @@ export const verifyLandService = async (
     throw new Error(`Blockchain mint failed: ${error.message}`);
   }
 
-  const txHash = receipt.hash;
-  const blockNumber = receipt.blockNumber;
-
-  /* ============================================================
-     DB TRANSACTION
-  ============================================================ */
   return await db.transaction(async (trx) => {
-    const [updatedLand] = await trx
+    const [updated] = await trx
       .update(lands)
       .set({
         verificationStatus: "verified",
-        blockchainTxHash: txHash,
-        blockNumber,
+        blockchainTxHash: receipt.hash,
+        blockNumber: receipt.blockNumber,
         verifiedBy: officerId,
         verifiedAt: new Date(),
         updatedAt: new Date()
@@ -154,26 +137,131 @@ export const verifyLandService = async (
       .where(eq(lands.id, landId))
       .returning();
 
-    /* ============================================================
-       AUDIT LOG
-    ============================================================ */
     await trx.insert(auditLogs).values({
       actionType: "LAND_VERIFIED",
       performedBy: officerId,
       landId,
-      blockchainTxHash: txHash,
-      metadata: {
-        lrNumber: land.lrNumber,
-        ownerId: land.ownerId,
-        blockNumber
-      }
+      blockchainTxHash: receipt.hash
     });
 
     return {
-      message: "Land verified successfully",
-      land: updatedLand,
-      txHash,
-      blockNumber
+      message: "Land verified",
+      land: updated
     };
   });
 };
+
+/* ============================================================
+   LIST LAND FOR SALE (MARKETPLACE ENTRY)
+============================================================ */
+export const listLandForSaleService = async (
+  userId: number,
+  landId: number,
+  priceInKsh: number
+) => {
+  const land = await db.query.lands.findFirst({
+    where: eq(lands.id, landId)
+  });
+
+  if (!land) throw new Error("Land not found");
+
+  if (land.ownerId !== userId) {
+    throw new Error("You do not own this land");
+  }
+
+  if (land.verificationStatus !== "verified") {
+    throw new Error("Land must be verified before selling");
+  }
+
+  if (land.isForSale) {
+    throw new Error("Land already listed for sale");
+  }
+
+  const [updated] = await db
+    .update(lands)
+    .set({
+      isForSale: true,
+      priceInKsh: priceInKsh.toString(),
+      updatedAt: new Date()
+    })
+    .where(eq(lands.id, landId))
+    .returning();
+
+  await db.insert(auditLogs).values({
+    actionType: "LAND_LISTED_FOR_SALE",
+    performedBy: userId,
+    landId,
+    metadata: { priceInKsh }
+  });
+
+  return updated;
+};
+
+/* ============================================================
+   REMOVE FROM SALE
+============================================================ */
+export const removeLandFromSaleService = async (
+  userId: number,
+  landId: number
+) => {
+  const land = await db.query.lands.findFirst({
+    where: eq(lands.id, landId)
+  });
+
+  if (!land) throw new Error("Land not found");
+
+  if (land.ownerId !== userId) {
+    throw new Error("Not authorized");
+  }
+
+  const [updated] = await db
+    .update(lands)
+    .set({
+      isForSale: false,
+      priceInKsh: null,
+      updatedAt: new Date()
+    })
+    .where(eq(lands.id, landId))
+    .returning();
+
+  await db.insert(auditLogs).values({
+    actionType: "LAND_REMOVED_FROM_SALE",
+    performedBy: userId,
+    landId
+  });
+
+  return updated;
+};
+
+/* ============================================================
+   MARKETPLACE VIEW (BUYERS SEE THIS)
+============================================================ */
+export const getMarketplaceLandsService = async () => {
+  return await db.query.lands.findMany({
+    where: and(
+      eq(lands.isForSale, true),
+      eq(lands.verificationStatus, "verified")
+    ),
+    with: {
+      owner: {
+        columns: {
+          id: true,
+          fullName: true,
+          walletAddress: true
+        }
+      }
+    },
+    orderBy: (l, { desc }) => [desc(l.createdAt)]
+  });
+};
+
+/* ============================================================
+   GET MY LANDS (OWNER DASHBOARD)
+============================================================ */
+export const getMyLandsService = async (userId: number) => {
+  return await db.query.lands.findMany({
+    where: eq(lands.ownerId, userId),
+    orderBy: (l, { desc }) => [desc(l.createdAt)]
+  });
+};
+

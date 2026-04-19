@@ -5,8 +5,7 @@ import { idempotencyKeys } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 /**
- * Idempotency Middleware
- * Prevents duplicate execution of POST/PUT requests
+ * Idempotency Middleware (PRODUCTION SAFE)
  */
 export const idempotencyMiddleware = async (
   req: Request,
@@ -24,7 +23,6 @@ export const idempotencyMiddleware = async (
       });
     }
 
-    // Create stable request hash
     const requestHash = crypto
       .createHash("sha256")
       .update(
@@ -46,21 +44,23 @@ export const idempotencyMiddleware = async (
     });
 
     if (existing) {
-      // Optional: validate request consistency
-      if (existing.requestHash && existing.requestHash !== requestHash) {
-        return res.status(409).json({
-          error: "Idempotency key reuse with different request"
+      //  SAME REQUEST → allow safe replay behavior
+      if (existing.requestHash === requestHash) {
+        return res.status(200).json({
+          message: "Request already processed (idempotent)",
+          idempotent: true
         });
       }
 
+      //  DIFFERENT REQUEST USING SAME KEY
       return res.status(409).json({
-        error: "Duplicate request detected",
-        message: "This request was already processed"
+        error: "Idempotency key conflict",
+        message: "Same key used for different request"
       });
     }
 
     /* ============================================================
-       INSERT LOCK (CRITICAL FIX)
+       STORE NEW IDEMPOTENCY ENTRY
     ============================================================ */
     await db.insert(idempotencyKeys).values({
       key: idempotencyKey,
@@ -68,9 +68,6 @@ export const idempotencyMiddleware = async (
       requestHash
     });
 
-    /* ============================================================
-       ATTACH TO REQUEST
-    ============================================================ */
     (req as any).idempotency = {
       key: idempotencyKey,
       requestHash

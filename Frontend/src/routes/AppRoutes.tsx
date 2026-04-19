@@ -23,7 +23,7 @@ import HowItWorks from "../pages/HowItWorks";
 import VerifyTitle from "../pages/VerifyTitle";
 import NotFound from "../pages/NotFound";
 
-// Auth & Recovery
+// Auth
 import VerifyEmail from "../pages/VerifyEmail";
 import VerifyNotice from "../pages/VerifyNotice";
 import ForgotPassword from "../pages/ForgotPassword";
@@ -35,6 +35,9 @@ import MyLands from "../pages/citizen/MyLands";
 import RegisterLand from "../pages/citizen/RegisterLand";
 import TransferLand from "../pages/citizen/TransferLand";
 import MyRequests from "../pages/citizen/MyRequests";
+
+// 👇 ADD THIS (IMPORTANT)
+import LandDetails from "../pages/citizen/LandDetails";
 
 // Officer Pages
 import OfficerDashboard from "../pages/landOfficer/OfficerDashboard";
@@ -55,6 +58,7 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
+
       {/* ================= PUBLIC ================= */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
@@ -63,15 +67,10 @@ const AppRoutes: React.FC = () => {
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/verify-title" element={<VerifyTitle />} />
 
-        {/* AUTH FLOW */}
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/verify-notice" element={<VerifyNotice />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-reset-code" element={<VerifyResetCode />} />
-        <Route
-          path="/reset-password"
-          element={<ComingSoon title="Reset Password" />}
-        />
       </Route>
 
       {/* ================= DASHBOARD REDIRECT ================= */}
@@ -93,38 +92,35 @@ const AppRoutes: React.FC = () => {
       />
 
       {/* ================= CITIZEN ================= */}
-      <Route
-        path="/citizen"
-        element={
-          <ProtectedRoute>
-            <RoleBasedRoute allowedRoles={["citizen"]}>
-              <CitizenLayout />
-            </RoleBasedRoute>
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Navigate to="dashboard" replace />} />
+<Route
+  path="/citizen"
+  element={
+    <ProtectedRoute>
+      <RoleBasedRoute allowedRoles={["citizen"]}>
+        <CitizenLayout />
+      </RoleBasedRoute>
+    </ProtectedRoute>
+  }
+>
+  <Route index element={<Navigate to="dashboard" replace />} />
+  <Route path="dashboard" element={<CitizenDashboard />} />
+  <Route path="my-lands" element={<MyLands />} />
+  <Route path="register-land" element={<RegisterLand />} />
 
-        <Route path="dashboard" element={<CitizenDashboard />} />
-        <Route path="my-lands" element={<MyLands />} />
-        <Route path="register-land" element={<RegisterLand />} />
+  {/* FIXED LAND DETAILS ROUTE 
+      The '*' allows lrNumber to capture "LA/CAM/229" 
+      instead of breaking at the first slash.
+  */}
+  <Route path="lands/*" element={<LandDetails />} />
 
-        {/* ✅ FIXED ROUTE (IMPORTANT) */}
-        <Route path="transfer" element={<TransferLand />} />
+  <Route path="transfer" element={<TransferLand />} />
+  <Route path="transfer/:id" element={<TransferLand />} />
+  <Route path="my-requests" element={<MyRequests />} />
 
-        {/* Optional future-proof dynamic route */}
-        <Route path="transfer/:id" element={<TransferLand />} />
-
-        <Route path="my-requests" element={<MyRequests />} />
-
-        {/* Coming soon */}
-        <Route
-          path="payments"
-          element={<ComingSoon title="Payments" />}
-        />
-        <Route path="wallet" element={<ComingSoon title="Wallet" />} />
-        <Route path="profile" element={<ComingSoon title="Profile" />} />
-      </Route>
+  <Route path="payments" element={<ComingSoon title="Payments" />} />
+  <Route path="wallet" element={<ComingSoon title="Wallet" />} />
+  <Route path="profile" element={<ComingSoon title="Profile" />} />
+</Route>
 
       {/* ================= OFFICER ================= */}
       <Route
@@ -138,13 +134,10 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
-
         <Route path="dashboard" element={<OfficerDashboard />} />
         <Route path="verify-lands" element={<VerifyLands />} />
         <Route path="transfers" element={<TransferApprovals />} />
         <Route path="search" element={<RegistrySearch />} />
-
-        <Route path="reports" element={<ComingSoon title="Reports" />} />
       </Route>
 
       {/* ================= ADMIN ================= */}
@@ -159,31 +152,12 @@ const AppRoutes: React.FC = () => {
         }
       >
         <Route index element={<Navigate to="dashboard" replace />} />
-
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="users" element={<UserManagement />} />
         <Route path="registry" element={<GlobalRegistry />} />
         <Route path="lands" element={<LandsManagement />} />
         <Route path="transfers" element={<TransfersManagement />} />
         <Route path="audit-logs" element={<AuditLogs />} />
-
-        {/* Coming soon */}
-        <Route
-          path="payments"
-          element={<ComingSoon title="Payments" />}
-        />
-        <Route
-          path="fraud"
-          element={<ComingSoon title="Fraud Monitoring" />}
-        />
-        <Route
-          path="blockchain"
-          element={<ComingSoon title="Blockchain Events" />}
-        />
-        <Route
-          path="idempotency"
-          element={<ComingSoon title="Idempotency Keys" />}
-        />
       </Route>
 
       {/* ================= FALLBACK ================= */}

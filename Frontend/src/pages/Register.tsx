@@ -6,6 +6,8 @@ import { setLoginPendingVerification } from "../features/auth/authSlice";
 import toast from "react-hot-toast";
 import { ethers } from "ethers";
 
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
+
 import {
   User,
   Mail,
@@ -19,12 +21,6 @@ import {
 } from "lucide-react";
 
 /* ================= TYPES ================= */
-interface ApiError {
-  status?: number;
-  data?: { message?: string };
-  message?: string;
-}
-
 interface InputFieldProps {
   icon: React.ReactNode;
   type?: React.HTMLInputTypeAttribute;
@@ -68,7 +64,7 @@ const Register: React.FC = () => {
       return;
     }
 
-    const loading = toast.loading("Connecting wallet...");
+    const toastId = toast.loading("Connecting wallet...");
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -80,10 +76,12 @@ const Register: React.FC = () => {
           walletAddress: accounts[0],
         }));
 
-        toast.success("Wallet connected", { id: loading });
+        toast.success("Wallet connected", { id: toastId });
+      } else {
+        toast.error("No wallet found", { id: toastId });
       }
     } catch {
-      toast.error("Wallet connection failed", { id: loading });
+      toast.error("Wallet connection failed", { id: toastId });
     }
   };
 
@@ -118,25 +116,26 @@ const Register: React.FC = () => {
     e.preventDefault();
     if (!validate()) return;
 
-    const loading = toast.loading("Creating account...");
+    const toastId = toast.loading("Creating account...");
 
     try {
       const res = await register(form).unwrap();
 
-      // ✅ ONLY THIS IS NEEDED (same as login flow)
       dispatch(setLoginPendingVerification(form.email));
 
       toast.success(res.message || "Account created", {
-        id: loading,
+        id: toastId,
       });
 
       navigate("/verify-email");
     } catch (err: unknown) {
-      const error = err as ApiError;
+      const error = err as FetchBaseQueryError & {
+        data?: { message?: string };
+      };
 
       toast.error(
-        error?.data?.message || error?.message || "Registration failed",
-        { id: loading }
+        error?.data?.message || "Registration failed",
+        { id: toastId }
       );
     }
   };

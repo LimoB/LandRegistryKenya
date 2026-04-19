@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useLoginMutation } from "../features/auth/authApi";
 import { useAppDispatch } from "../app/hooks";
-import {
-  setLoginPendingVerification,
-} from "../features/auth/authSlice";
+import { setLoginPendingVerification } from "../features/auth/authSlice";
 import toast from "react-hot-toast";
 
 import {
@@ -19,6 +17,8 @@ import {
   Info,
 } from "lucide-react";
 
+import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
+
 /* ================= TYPES ================= */
 interface InputFieldProps {
   icon: React.ReactNode;
@@ -27,12 +27,6 @@ interface InputFieldProps {
   placeholder: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}
-
-interface ApiError {
-  status?: number;
-  data?: { message?: string; error?: string };
-  message?: string;
 }
 
 /* ================= COMPONENT ================= */
@@ -70,7 +64,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const loadingToast = toast.loading("Signing in...");
+    const toastId = toast.loading("Signing in...");
 
     try {
       const res = await login({
@@ -79,43 +73,48 @@ const Login: React.FC = () => {
       }).unwrap();
 
       toast.success(`Welcome back, ${res.user.fullName.split(" ")[0]}`, {
-        id: loadingToast,
+        id: toastId,
       });
 
-      /* =========================
-         ROUTE BY ROLE
-      ========================= */
-      const role = res.user.role;
-
-      if (role === "admin") navigate("/admin/dashboard");
-      else if (role === "land_officer") navigate("/officer/dashboard");
-      else navigate("/citizen/dashboard");
-
+      // ROLE ROUTING
+      switch (res.user.role) {
+        case "admin":
+          navigate("/admin/dashboard");
+          break;
+        case "land_officer":
+          navigate("/officer/dashboard");
+          break;
+        default:
+          navigate("/citizen/dashboard");
+      }
     } catch (err: unknown) {
-      const error = err as ApiError;
+      const error = err as FetchBaseQueryError & {
+        data?: { message?: string; error?: string };
+      };
 
       const status = error?.status;
       const message =
         error?.data?.message ||
         error?.data?.error ||
-        error?.message ||
         "Login failed";
 
-      /* =========================
-         OTP / VERIFICATION FLOW
-      ========================= */
-      if (status === 403 || message.toLowerCase().includes("verify")) {
+      // EMAIL VERIFICATION FLOW
+      const isVerificationIssue =
+        status === 403 ||
+        message.toLowerCase().includes("verify");
+
+      if (isVerificationIssue) {
         dispatch(setLoginPendingVerification(formData.email));
 
         toast.error("Please verify your account first", {
-          id: loadingToast,
+          id: toastId,
         });
 
         navigate("/verify-email");
         return;
       }
 
-      toast.error(message, { id: loadingToast });
+      toast.error(message, { id: toastId });
     }
   };
 
@@ -124,7 +123,6 @@ const Login: React.FC = () => {
 
       {/* LEFT SIDE */}
       <div className="flex items-center justify-center px-6 py-12">
-
         <div className="w-full max-w-sm space-y-8">
 
           {/* HEADER */}

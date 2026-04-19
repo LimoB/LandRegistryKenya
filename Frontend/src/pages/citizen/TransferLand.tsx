@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCreateTransferMutation } from "../../features/transfers/transferApi";
 import { useGetLandsQuery } from "../../features/lands/landApi";
 import { useAppSelector } from "../../app/hooks";
+
 import {
   ArrowRightLeft,
   Search,
@@ -12,182 +13,243 @@ import {
   Wallet,
 } from "lucide-react";
 
+/* ================================
+   MAIN COMPONENT
+================================ */
 const TransferLand: React.FC = () => {
   const navigate = useNavigate();
-
   const { user } = useAppSelector((state) => state.auth);
 
-  // APIs
-  const { data: lands, isLoading: landsLoading } = useGetLandsQuery();
-  const [createTransfer, { isLoading: isSubmitting, isSuccess, isError }] =
+  const { data: lands = [], isLoading: landsLoading } = useGetLandsQuery();
+
+  const [createTransfer, { isLoading, isSuccess, isError, error }] =
     useCreateTransferMutation();
 
-  // Form State
   const [selectedLandId, setSelectedLandId] = useState<number | null>(null);
-  const [sellerId, setSellerId] = useState("");
-  const [receiptCode, setReceiptCode] = useState("");
+  const [search, setSearch] = useState("");
 
+  /* ================================
+     MARKETPLACE LANDS (IMPORTANT FIX)
+     - show ALL lands for sale
+     - NOT only owned lands
+  ================================ */
+  const availableLands = useMemo(() => {
+    return lands.filter((land) => {
+      const isForSale = land.isForSale;
+      const isVerified = land.verificationStatus === "verified";
+
+      const matchesSearch = land.lrNumber
+        .toLowerCase()
+        .includes(search.toLowerCase());
+
+      return isForSale && isVerified && matchesSearch;
+    });
+  }, [lands, search]);
+
+  /* ================================
+     AVOID SELF-TRANSFER (UI SAFETY)
+  ================================ */
+  const selectedLand = useMemo(() => {
+    return lands.find((l) => l.id === selectedLandId);
+  }, [selectedLandId, lands]);
+
+  const isOwnLandSelected =
+    selectedLand && selectedLand.ownerId === user?.id;
+
+  /* ================================
+     SUBMIT TRANSFER
+  ================================ */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedLandId) return;
+    if (!selectedLandId || isLoading) return;
+
+    if (isOwnLandSelected) {
+      alert("You cannot buy your own land.");
+      return;
+    }
 
     try {
       await createTransfer({
         landId: selectedLandId,
       }).unwrap();
 
-      setTimeout(() => navigate("/citizen/dashboard"), 2500);
+      setSelectedLandId(null);
+
+      setTimeout(() => {
+        navigate("/citizen/my-transfers");
+      }, 1200);
     } catch (err) {
       console.error("Transfer failed:", err);
     }
   };
 
+  /* ================================
+     SUCCESS STATE
+  ================================ */
   if (isSuccess) return <SuccessState />;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-8">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
+
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b pb-6">
+
         <div>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">
-            Property Transfer
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Initiating as{" "}
-            <span className="text-blue-600 font-bold">
-              {user?.fullName || "Citizen"}
-            </span>
+          <h1 className="text-3xl font-black">Land Marketplace</h1>
+          <p className="text-sm text-slate-500">
+            Browse available land and initiate purchase requests
           </p>
         </div>
 
-        {/* Wallet */}
-        <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-900 rounded-2xl border">
+        {/* WALLET */}
+        <div className="flex items-center gap-2 px-4 py-2 border rounded-xl bg-slate-50 dark:bg-slate-900">
           <Wallet size={16} />
           <span className="text-xs font-mono">
             {user?.walletAddress
               ? `${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`
-              : "No Wallet"}
+              : "No wallet connected"}
           </span>
         </div>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* LAND LIST */}
+
+        {/* ================================
+            MARKETPLACE LIST
+        ================================ */}
         <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-slate-950 border rounded-2xl overflow-hidden">
-            <div className="p-6 border-b flex justify-between">
+
+          <div className="border rounded-2xl bg-white dark:bg-slate-950">
+
+            {/* SEARCH */}
+            <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold flex items-center gap-2">
-                <Landmark size={16} /> Land Registry
+                <Landmark size={16} />
+                Available Lands
               </h3>
 
               <div className="relative">
-                <Search className="absolute left-2 top-2 text-slate-400" size={12} />
+                <Search size={12} className="absolute left-2 top-2 text-slate-400" />
                 <input
-                  placeholder="Search..."
-                  className="pl-7 pr-2 py-1 border rounded text-xs"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search LR number..."
+                  className="pl-7 pr-3 py-1 text-xs border rounded-lg"
                 />
               </div>
             </div>
 
-            <div className="p-2 max-h-[450px] overflow-y-auto">
+            {/* LIST */}
+            <div className="max-h-[450px] overflow-y-auto p-2">
+
               {landsLoading ? (
-                <div className="p-10 text-center">Loading...</div>
+                <p className="p-10 text-center text-sm text-slate-500">
+                  Loading marketplace...
+                </p>
+              ) : availableLands.length === 0 ? (
+                <p className="p-10 text-center text-sm text-slate-500">
+                  No lands available for sale
+                </p>
               ) : (
-                lands
-                  ?.filter(
-                    (l) =>
-                      l.verificationStatus === "verified" && l.isForSale
-                  )
-                  .map((land) => (
+                availableLands.map((land) => {
+                  const isMine = land.ownerId === user?.id;
+
+                  return (
                     <button
                       key={land.id}
+                      type="button"
+                      disabled={isMine}
                       onClick={() => setSelectedLandId(land.id)}
-                      className={`w-full p-4 flex justify-between rounded-xl ${
+                      className={`w-full flex items-center justify-between p-4 rounded-xl transition ${
                         selectedLandId === land.id
                           ? "bg-blue-600 text-white"
-                          : "hover:bg-slate-100"
+                          : isMine
+                          ? "opacity-40 cursor-not-allowed"
+                          : "hover:bg-slate-100 dark:hover:bg-slate-900"
                       }`}
                     >
-                      <div className="flex gap-3">
+
+                      <div className="flex items-center gap-3">
                         <MapPin size={18} />
-                        <div>
+                        <div className="text-left">
                           <p className="font-bold">{land.lrNumber}</p>
-                          <p className="text-xs">
+                          <p className="text-xs opacity-70">
                             {land.county} • {land.landType}
                           </p>
                         </div>
                       </div>
 
-                      {selectedLandId === land.id ? (
-                        <CheckCircle2 />
-                      ) : null}
+                      {selectedLandId === land.id && <CheckCircle2 />}
+
                     </button>
-                  ))
+                  );
+                })
               )}
+
             </div>
           </div>
         </div>
 
-        {/* FORM */}
+        {/* ================================
+            ACTION PANEL
+        ================================ */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-white dark:bg-slate-950 border p-6 rounded-3xl space-y-6">
+
+          <div className="border rounded-2xl p-6 bg-white dark:bg-slate-950 space-y-6">
+
             <h3 className="font-bold flex items-center gap-2">
-              <ArrowRightLeft size={18} /> Transfer Details
+              <ArrowRightLeft size={18} />
+              Purchase Request
             </h3>
 
-            <div>
-              <label className="text-xs font-bold">Seller ID (optional)</label>
-              <input
-                type="number"
-                value={sellerId}
-                onChange={(e) => setSellerId(e.target.value)}
-                className="w-full p-3 border rounded-xl"
-              />
+            <div className="p-3 bg-yellow-50 text-xs rounded-xl">
+              This will create a transfer request pending officer approval.
             </div>
 
-            <div>
-              <label className="text-xs font-bold">
-                M-Pesa Code (optional)
-              </label>
-              <input
-                type="text"
-                value={receiptCode}
-                onChange={(e) => setReceiptCode(e.target.value)}
-                className="w-full p-3 border rounded-xl"
-              />
-            </div>
+            {/* SELF TRANSFER WARNING */}
+            {isOwnLandSelected && (
+              <p className="text-red-500 text-xs">
+                You cannot initiate transfer on your own land.
+              </p>
+            )}
 
-            <div className="p-3 bg-yellow-100 rounded-xl text-xs">
-              Ensure payment is verified before transfer.
-            </div>
-
+            {/* ERROR */}
             {isError && (
               <p className="text-red-500 text-xs">
-                Failed to create transfer. Try again.
+                {typeof error === "object" && error !== null && "data" in error
+                  ? (error.data as { error?: string }).error || "Transfer failed"
+                  : "Transfer failed"}
               </p>
             )}
 
             <button
               type="submit"
-              disabled={isSubmitting || !selectedLandId}
-              className="w-full bg-blue-600 text-white py-3 rounded-xl"
+              disabled={!selectedLandId || isLoading || isOwnLandSelected}
+              className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold disabled:opacity-50"
             >
-              {isSubmitting ? "Processing..." : "Create Transfer"}
+              {isLoading ? "Creating request..." : "Initiate Purchase"}
             </button>
+
           </div>
+
         </form>
+
       </div>
     </div>
   );
 };
 
+/* ================================
+   SUCCESS STATE
+================================ */
 const SuccessState = () => (
-  <div className="text-center py-20">
+  <div className="text-center py-20 space-y-3">
     <CheckCircle2 size={48} className="mx-auto text-green-500" />
-    <h2 className="text-2xl font-bold mt-4">Transfer Created</h2>
-    <p className="text-gray-500">
-      Awaiting approval from land officer
+    <h2 className="text-2xl font-bold">Request Submitted</h2>
+    <p className="text-slate-500">
+      Your purchase request is now pending officer approval.
     </p>
   </div>
 );

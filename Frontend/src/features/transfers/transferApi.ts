@@ -50,6 +50,7 @@ export interface CreateTransferPayload {
 }
 
 export interface RejectTransferPayload {
+  id: number;
   reason: string;
 }
 
@@ -60,14 +61,14 @@ export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ============================================================
-       CREATE TRANSFER
+       INITIATE TRANSFER (FIXED ✅)
     ============================================================ */
     createTransfer: builder.mutation<
       { message: string; request: TransferRequest },
       CreateTransferPayload
     >({
       query: (body) => ({
-        url: "/transfers",
+        url: "/transfers/initiate", // ✅ FIXED
         method: "POST",
         body,
       }),
@@ -76,7 +77,7 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       GET PENDING TRANSFERS
+       GET PENDING TRANSFERS (OFFICER)
     ============================================================ */
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
@@ -105,7 +106,7 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       APPROVE TRANSFER
+       APPROVE TRANSFER (OFFICER)
     ============================================================ */
     approveTransfer: builder.mutation<{ message: string }, number>({
       query: (id) => ({
@@ -121,11 +122,11 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       REJECT TRANSFER
+       REJECT TRANSFER (OFFICER)
     ============================================================ */
     rejectTransfer: builder.mutation<
       { message: string },
-      { id: number; reason: string }
+      RejectTransferPayload
     >({
       query: ({ id, reason }) => ({
         url: `/transfers/reject/${id}`,
@@ -140,29 +141,7 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       MARK AS PAID
-    ============================================================ */
-    markAsPaid: builder.mutation<
-      { message: string },
-      { id: number; paymentMethod: "stripe" | "mpesa"; reference?: string }
-    >({
-      query: ({ id, paymentMethod, reference }) => ({
-        url: `/transfers/pay/${id}`,
-        method: "POST",
-        body: {
-          paymentMethod,
-          reference,
-        },
-      }),
-
-      invalidatesTags: (_result, _error, arg) => [
-        { type: "Transfer", id: arg.id },
-        { type: "Transfer", id: "LIST" },
-      ],
-    }),
-
-    /* ============================================================
-       FINALIZE (BLOCKCHAIN)
+       FINALIZE TRANSFER (BLOCKCHAIN)
     ============================================================ */
     finalizeTransfer: builder.mutation<
       { message: string; txHash: string },
@@ -181,10 +160,10 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       SELLER SALES
+       GET MY SALES (FIXED ✅)
     ============================================================ */
-    getMySales: builder.query<TransferRequest[], number>({
-      query: (sellerId) => `/transfers/seller/${sellerId}`,
+    getMySales: builder.query<TransferRequest[], void>({
+      query: () => "/transfers/my-sales", // ✅ FIXED
 
       providesTags: (result) =>
         result
@@ -197,6 +176,7 @@ export const transferApi = baseApi.injectEndpoints({
             ]
           : [{ type: "Transfer", id: "LIST" }],
     }),
+
   }),
 });
 
@@ -209,7 +189,6 @@ export const {
   useGetTransferByIdQuery,
   useApproveTransferMutation,
   useRejectTransferMutation,
-  useMarkAsPaidMutation,
   useFinalizeTransferMutation,
   useGetMySalesQuery,
 } = transferApi;

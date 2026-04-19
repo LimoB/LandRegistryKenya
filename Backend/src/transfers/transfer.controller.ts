@@ -10,34 +10,55 @@ import {
 } from "./transfer.service";
 
 /* ============================================================
-   INITIATE TRANSFER (Buyer)
+   SAFE USER EXTRACTOR (REUSABLE)
+============================================================ */
+const getUserId = (req: Request): number | null => {
+  return (req as any)?.user?.userId || null;
+};
+
+/* ============================================================
+   INITIATE TRANSFER (BUYER)
 ============================================================ */
 export const initiateTransfer = async (req: Request, res: Response) => {
   try {
-    const { landId } = req.body;
-    const buyerId = (req as any).user?.userId;
+    const buyerId = getUserId(req);
 
     if (!buyerId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const request = await createTransferRequestService(buyerId, landId);
+    const { landId } = req.body;
 
-    res.status(201).json({
+    if (!landId) {
+      return res.status(400).json({ error: "landId is required" });
+    }
+
+    // NOTE:
+    // ❌ DO NOT check idempotency here
+    // ✔ middleware already handles it
+
+    const request = await createTransferRequestService(
+      buyerId,
+      Number(landId)
+    );
+
+    return res.status(201).json({
       message: "Transfer request created",
       request
     });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({
+      error: error.message || "Failed to create transfer"
+    });
   }
 };
 
 /* ============================================================
-   APPROVE TRANSFER (Officer)
+   APPROVE TRANSFER (OFFICER)
 ============================================================ */
 export const approveTransfer = async (req: Request, res: Response) => {
   try {
-    const officerId = (req as any).user?.userId;
+    const officerId = getUserId(req);
 
     if (!officerId) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -48,18 +69,20 @@ export const approveTransfer = async (req: Request, res: Response) => {
       officerId
     );
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({
+      error: error.message || "Failed to approve transfer"
+    });
   }
 };
 
 /* ============================================================
-   FINALIZE TRANSFER (Officer - Blockchain step)
+   FINALIZE TRANSFER (BLOCKCHAIN STEP)
 ============================================================ */
 export const finalizeTransfer = async (req: Request, res: Response) => {
   try {
-    const officerId = (req as any).user?.userId;
+    const officerId = getUserId(req);
 
     if (!officerId) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -70,19 +93,24 @@ export const finalizeTransfer = async (req: Request, res: Response) => {
       officerId
     );
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error: any) {
-    const statusCode = error.message.includes("Blockchain") ? 500 : 400;
-    res.status(statusCode).json({ error: error.message });
+    const message = error.message || "Failed to finalize transfer";
+
+    const statusCode = message.includes("Blockchain") ? 500 : 400;
+
+    return res.status(statusCode).json({
+      error: message
+    });
   }
 };
 
 /* ============================================================
-   REJECT TRANSFER (Officer)
+   REJECT TRANSFER
 ============================================================ */
 export const rejectTransfer = async (req: Request, res: Response) => {
   try {
-    const officerId = (req as any).user?.userId;
+    const officerId = getUserId(req);
 
     if (!officerId) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -90,36 +118,46 @@ export const rejectTransfer = async (req: Request, res: Response) => {
 
     const { reason } = req.body;
 
+    if (!reason) {
+      return res.status(400).json({
+        error: "Rejection reason is required"
+      });
+    }
+
     const result = await rejectTransferService(
       Number(req.params.id),
       officerId,
       reason
     );
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({
+      error: error.message || "Failed to reject transfer"
+    });
   }
 };
 
 /* ============================================================
-   GET PENDING TRANSFERS (Officer)
+   GET PENDING TRANSFERS (OFFICER)
 ============================================================ */
 export const getPending = async (_req: Request, res: Response) => {
   try {
     const data = await getPendingTransfersService();
-    res.status(200).json(data);
+    return res.status(200).json(data);
   } catch {
-    res.status(500).json({ error: "Failed to fetch pending transfers" });
+    return res.status(500).json({
+      error: "Failed to fetch pending transfers"
+    });
   }
 };
 
 /* ============================================================
-   GET MY SALES (Seller)
+   GET MY SALES (SELLER)
 ============================================================ */
 export const getMySales = async (req: Request, res: Response) => {
   try {
-    const sellerId = (req as any).user?.userId;
+    const sellerId = getUserId(req);
 
     if (!sellerId) {
       return res.status(401).json({ error: "Unauthorized" });
@@ -127,25 +165,31 @@ export const getMySales = async (req: Request, res: Response) => {
 
     const sales = await getSellerTransfersService(sellerId);
 
-    res.status(200).json(sales);
+    return res.status(200).json(sales);
   } catch {
-    res.status(500).json({ error: "Failed to fetch sales history" });
+    return res.status(500).json({
+      error: "Failed to fetch sales history"
+    });
   }
 };
 
 /* ============================================================
-   GET TRANSFER BY ID
+   GET TRANSFER BY ID (ALL ROLES)
 ============================================================ */
 export const getTransferById = async (req: Request, res: Response) => {
   try {
     const transfer = await getTransferByIdService(Number(req.params.id));
 
     if (!transfer) {
-      return res.status(404).json({ error: "Transfer not found" });
+      return res.status(404).json({
+        error: "Transfer not found"
+      });
     }
 
-    res.status(200).json(transfer);
+    return res.status(200).json(transfer);
   } catch {
-    res.status(500).json({ error: "Failed to fetch transfer" });
+    return res.status(500).json({
+      error: "Failed to fetch transfer"
+    });
   }
 };

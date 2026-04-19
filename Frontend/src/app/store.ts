@@ -9,7 +9,6 @@ import userReducer from "../features/users/userSlice";
 import paymentReducer from "../features/payment/paymentSlice";
 import auditReducer from "../features/audit/auditSlice";
 
-// ✅ redux persist
 import {
   persistStore,
   persistReducer,
@@ -21,12 +20,38 @@ import {
   REGISTER,
 } from "redux-persist";
 
-import storage from "redux-persist/lib/storage";
+/* =========================
+   ✅ CUSTOM STORAGE (VITE SAFE)
+========================= */
+const createNoopStorage = () => ({
+  getItem: async () => null,
+  setItem: async (_: string, value: unknown) => value,
+  removeItem: async () => {},
+});
 
-// ✅ combine reducers (scalable)
+const webStorage = {
+  getItem: (key: string) =>
+    Promise.resolve(localStorage.getItem(key)),
+
+  setItem: (key: string, value: string) => {
+    localStorage.setItem(key, value);
+    return Promise.resolve(true);
+  },
+
+  removeItem: (key: string) => {
+    localStorage.removeItem(key);
+    return Promise.resolve();
+  },
+};
+
+const storage =
+  typeof window !== "undefined" ? webStorage : createNoopStorage();
+
+/* =========================
+   ROOT REDUCER
+========================= */
 const rootReducer = combineReducers({
   [baseApi.reducerPath]: baseApi.reducer,
-
   auth: authReducer,
   land: landReducer,
   transfer: transferReducer,
@@ -35,29 +60,55 @@ const rootReducer = combineReducers({
   audit: auditReducer,
 });
 
-// ✅ persist config (ONLY auth)
+/* =========================
+   ROOT STATE (BEFORE PERSIST)
+========================= */
+export type RootState = ReturnType<typeof rootReducer>;
+
+/* =========================
+   PERSIST CONFIG
+========================= */
 const persistConfig = {
   key: "root",
   storage,
-  whitelist: ["auth"], // 🔥 important
+  whitelist: ["auth"],
+  blacklist: [baseApi.reducerPath],
 };
 
+/* =========================
+   PERSISTED REDUCER
+========================= */
 const persistedReducer = persistReducer(persistConfig, rootReducer);
 
+/* =========================
+   STORE
+========================= */
 export const store = configureStore({
   reducer: persistedReducer,
 
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // ✅ required for redux-persist
-        ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
+        ignoredActions: [
+          FLUSH,
+          REHYDRATE,
+          PAUSE,
+          PERSIST,
+          PURGE,
+          REGISTER,
+        ],
       },
     }).concat(baseApi.middleware),
+
+  devTools: import.meta.env.MODE !== "production",
 });
 
-// ✅ export persistor
+/* =========================
+   PERSISTOR
+========================= */
 export const persistor = persistStore(store);
 
-export type RootState = ReturnType<typeof store.getState>;
+/* =========================
+   TYPES
+========================= */
 export type AppDispatch = typeof store.dispatch;

@@ -8,17 +8,20 @@ interface TransferState {
   selectedTransfer: TransferRequest | null;
 
   // MODALS
-  showInitiateModal: boolean;
-  showApproveModal: boolean;
-  showRejectModal: boolean;
-  showPaymentModal: boolean;
+  modals: {
+    initiate: boolean;
+    approve: boolean;
+    reject: boolean;
+    payment: boolean;
+  };
 
-  // ACTION STATES (granular instead of one boolean)
+  // LOADING STATES
   loading: {
     initiate: boolean;
     approve: boolean;
     reject: boolean;
     payment: boolean;
+    finalize: boolean;
   };
 }
 
@@ -28,16 +31,19 @@ interface TransferState {
 const initialState: TransferState = {
   selectedTransfer: null,
 
-  showInitiateModal: false,
-  showApproveModal: false,
-  showRejectModal: false,
-  showPaymentModal: false,
+  modals: {
+    initiate: false,
+    approve: false,
+    reject: false,
+    payment: false,
+  },
 
   loading: {
     initiate: false,
     approve: false,
     reject: false,
     payment: false,
+    finalize: false,
   },
 };
 
@@ -58,10 +64,28 @@ const transferSlice = createSlice({
       state.selectedTransfer = action.payload;
     },
 
+    clearSelectedTransfer: (state) => {
+      state.selectedTransfer = null;
+    },
+
     /* ============================================================
-       LOADING STATES (GRANULAR)
+       MODALS (GENERIC HANDLING)
     ============================================================ */
-    setTransferLoading: (
+    setModal: (
+      state,
+      action: PayloadAction<{
+        modal: keyof TransferState["modals"];
+        value: boolean;
+      }>
+    ) => {
+      const { modal, value } = action.payload;
+      state.modals[modal] = value;
+    },
+
+    /* ============================================================
+       LOADING STATES (GENERIC)
+    ============================================================ */
+    setLoading: (
       state,
       action: PayloadAction<{
         type: keyof TransferState["loading"];
@@ -73,62 +97,45 @@ const transferSlice = createSlice({
     },
 
     /* ============================================================
-       INITIATE MODAL
+       QUICK ACTIONS (UI SHORTCUTS)
     ============================================================ */
+
     openInitiateModal: (state) => {
-      state.showInitiateModal = true;
+      state.modals.initiate = true;
     },
     closeInitiateModal: (state) => {
-      state.showInitiateModal = false;
+      state.modals.initiate = false;
     },
 
-    /* ============================================================
-       APPROVE MODAL
-    ============================================================ */
-    openApproveModal: (
-      state,
-      action: PayloadAction<TransferRequest>
-    ) => {
+    openApproveModal: (state, action: PayloadAction<TransferRequest>) => {
       state.selectedTransfer = action.payload;
-      state.showApproveModal = true;
+      state.modals.approve = true;
     },
     closeApproveModal: (state) => {
-      state.showApproveModal = false;
+      state.modals.approve = false;
       state.selectedTransfer = null;
     },
 
-    /* ============================================================
-       REJECT MODAL
-    ============================================================ */
-    openRejectModal: (
-      state,
-      action: PayloadAction<TransferRequest>
-    ) => {
+    openRejectModal: (state, action: PayloadAction<TransferRequest>) => {
       state.selectedTransfer = action.payload;
-      state.showRejectModal = true;
+      state.modals.reject = true;
     },
     closeRejectModal: (state) => {
-      state.showRejectModal = false;
+      state.modals.reject = false;
       state.selectedTransfer = null;
     },
 
-    /* ============================================================
-       PAYMENT MODAL
-    ============================================================ */
-    openPaymentModal: (
-      state,
-      action: PayloadAction<TransferRequest>
-    ) => {
+    openPaymentModal: (state, action: PayloadAction<TransferRequest>) => {
       state.selectedTransfer = action.payload;
-      state.showPaymentModal = true;
+      state.modals.payment = true;
     },
     closePaymentModal: (state) => {
-      state.showPaymentModal = false;
+      state.modals.payment = false;
       state.selectedTransfer = null;
     },
 
     /* ============================================================
-       RESET ALL STATE
+       RESET
     ============================================================ */
     resetTransferState: () => initialState,
   },
@@ -139,7 +146,10 @@ const transferSlice = createSlice({
 ================================ */
 export const {
   setSelectedTransfer,
-  setTransferLoading,
+  clearSelectedTransfer,
+
+  setModal,
+  setLoading,
 
   openInitiateModal,
   closeInitiateModal,
@@ -165,12 +175,7 @@ export const selectSelectedTransfer = (state: {
 
 export const selectTransferModals = (state: {
   transfer: TransferState;
-}) => ({
-  initiate: state.transfer.showInitiateModal,
-  approve: state.transfer.showApproveModal,
-  reject: state.transfer.showRejectModal,
-  payment: state.transfer.showPaymentModal,
-});
+}) => state.transfer.modals;
 
 export const selectTransferLoading = (state: {
   transfer: TransferState;

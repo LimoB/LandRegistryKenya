@@ -10,18 +10,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { token, user } = useAppSelector((state) => state.auth);
   const location = useLocation();
 
-  // 🔐 Not authenticated
+  // Not authenticated
   if (!token || !user) {
     return (
       <Navigate
         to="/login"
         replace
-        state={{ from: location }} // 👈 useful for redirect after login
+        state={{ from: location }} //  useful for redirect after login
       />
     );
   }
 
-  // ✅ Authenticated
+  // Authenticated
   return <>{children}</>;
 };
 
