@@ -8,7 +8,7 @@ import {
   removeLandFromSale,
   getMarketplaceLands,
   getMyLands
-} from "./land.controller";
+} from "./controllers/index";
 
 import {
   officerAuth,

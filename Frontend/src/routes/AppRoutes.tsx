@@ -30,7 +30,7 @@ import ForgotPassword from "../pages/ForgotPassword";
 import VerifyResetCode from "../pages/VerifyResetCode";
 
 // Shared Pages
-import Profile from "../pages/Profile"; // Real Profile Page added
+import Profile from "../pages/Profile"; 
 
 // Citizen Pages
 import CitizenDashboard from "../pages/citizen/CitizenDashboard";
@@ -38,13 +38,14 @@ import MyLands from "../pages/citizen/MyLands";
 import RegisterLand from "../pages/citizen/RegisterLand";
 import TransferLand from "../pages/citizen/TransferLand";
 import MyRequests from "../pages/citizen/MyRequests";
-import LandDetails from "../pages/citizen/LandDetails";
+import CitizenLandDetails from "../pages/citizen/LandDetails";
 
 // Officer Pages
 import OfficerDashboard from "../pages/landOfficer/OfficerDashboard";
 import VerifyLands from "../pages/landOfficer/VerifyLands";
 import TransferApprovals from "../pages/landOfficer/TransferApprovals";
 import RegistrySearch from "../pages/landOfficer/RegistrySearch";
+import OfficerLandDetails from "../components/officer/LandDetails"; // The new Details Page
 
 // Admin Pages
 import AdminDashboard from "../pages/admin/AdminDashboard";
@@ -108,14 +109,13 @@ const AppRoutes: React.FC = () => {
         <Route path="register-land" element={<RegisterLand />} />
         
         {/* LR Number capture support */}
-        <Route path="lands/*" element={<LandDetails />} />
+        <Route path="lands/*" element={<CitizenLandDetails />} />
 
         <Route path="transfer" element={<TransferLand />} />
         <Route path="transfer/:id" element={<TransferLand />} />
         <Route path="my-requests" element={<MyRequests />} />
-        <Route path="profile" element={<Profile />} /> {/*Swapped placeholder for real page */}
+        <Route path="profile" element={<Profile />} />
 
-        {/* Remaining Coming Soon */}
         <Route path="payments" element={<ComingSoon title="Payments" />} />
         <Route path="wallet" element={<ComingSoon title="Wallet" />} />
       </Route>
@@ -136,7 +136,11 @@ const AppRoutes: React.FC = () => {
         <Route path="verify-lands" element={<VerifyLands />} />
         <Route path="transfers" element={<TransferApprovals />} />
         <Route path="search" element={<RegistrySearch />} />
-        <Route path="profile" element={<Profile />} /> {/*Added Profile */}
+        
+        {/* NEW: Official Registry View Route */}
+        <Route path="registry/view/:id" element={<OfficerLandDetails />} />
+        
+        <Route path="profile" element={<Profile />} />
       </Route>
 
       {/* ================= ADMIN ================= */}
@@ -157,7 +161,7 @@ const AppRoutes: React.FC = () => {
         <Route path="lands" element={<LandsManagement />} />
         <Route path="transfers" element={<TransfersManagement />} />
         <Route path="audit-logs" element={<AuditLogs />} />
-        <Route path="profile" element={<Profile />} /> {/*Added Profile */}
+        <Route path="profile" element={<Profile />} />
       </Route>
 
       {/* ================= FALLBACK ================= */}

@@ -1,60 +1,25 @@
 import React, { useState, useMemo } from "react";
-// Import type explicitly for ChangeEvent to satisfy verbatimModuleSyntax
 import type { ChangeEvent } from "react";
-import { 
-  useGetLandsQuery 
-} from "../../features/lands/landApi";
-import { 
-  Search, 
-  Map, 
-  User, 
-  ShieldCheck, 
-  Database, 
-  ChevronRight,
-  History
-} from "lucide-react";
-
-// Define the Owner interface
-interface LandOwner {
-  fullName: string;
-  email: string;
-  idNumber: string;
-  walletAddress: string;
-}
-
-// Fixed: sizeInAcres changed to number to match your API/Land type
-interface LandRecord {
-  id: number;
-  lrNumber: string;
-  onChainId: number | null;
-  verificationStatus: "pending" | "verified" | "rejected";
-  sizeInAcres: number; 
-  priceInKsh: number | null;
-  landType: string;
-  county: string;
-  ipfsDocHash?: string;
-  owner?: LandOwner;
-}
+import { useGetLandsQuery } from "../../features/lands/landApi";
+import { Search, ShieldCheck, Loader2 } from "lucide-react";
+import RegistryCard from "../../components/officer/RegistryCard";
 
 const RegistrySearch: React.FC = () => {
   const { data: allLands, isLoading } = useGetLandsQuery();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "verified" | "pending">("all");
 
-  // Optimized Search Logic
+  // Filtering Logic
   const filteredResults = useMemo(() => {
-    if (!allLands) return [] as LandRecord[];
-    
-    // Safely convert types using 'unknown' to bypass strict overlap checks
-    const lands = (allLands as unknown) as LandRecord[];
+    if (!allLands) return [];
 
-    return lands.filter((land) => {
+    return allLands.filter((land) => {
       const search = searchTerm.toLowerCase();
       
       const matchesSearch = 
         land.lrNumber.toLowerCase().includes(search) ||
-        land.owner?.fullName?.toLowerCase().includes(search) ||
-        land.owner?.walletAddress?.toLowerCase().includes(search);
+        (land.owner?.fullName?.toLowerCase().includes(search) ?? false) ||
+        (land.owner?.walletAddress?.toLowerCase().includes(search) ?? false);
       
       const matchesFilter = filterType === "all" || land.verificationStatus === filterType;
       
@@ -62,7 +27,6 @@ const RegistrySearch: React.FC = () => {
     });
   }, [allLands, searchTerm, filterType]);
 
-  // Type-safe change handlers
   const handleSearchChange = (e: ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value);
   
   const handleFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
@@ -70,124 +34,97 @@ const RegistrySearch: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto space-y-8 animate-in fade-in zoom-in-95 duration-500">
+    <div className="max-w-[1600px] mx-auto space-y-6 md:space-y-8 p-4 md:p-6 animate-in fade-in zoom-in-95 duration-500">
       
-      {/* 1. Enhanced Search Header */}
-      <div className="bg-slate-900 dark:bg-white rounded-[3rem] p-10 text-white dark:text-slate-900 shadow-2xl relative overflow-hidden">
-        <div className="relative z-10 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500 rounded-lg">
-              <Search size={20} className="text-white" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tighter uppercase italic">National Registry Search</h1>
+      {/* 1. Search Header Container */}
+      <div className="bg-slate-900 dark:bg-slate-950 rounded-[2.5rem] p-6 md:p-12 text-white shadow-2xl relative overflow-hidden border border-white/5">
+        <div className="relative z-10 space-y-6 md:space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-2xl md:text-4xl font-black tracking-tighter uppercase italic flex items-center gap-3 md:gap-4">
+              <span className="bg-blue-600 p-2 md:p-3 rounded-2xl shadow-lg shadow-blue-500/40">
+                <Search size={24} className="text-white" />
+              </span>
+              National Registry
+            </h1>
+            <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-[0.3em]">
+              Real-Time Blockchain Verification Node
+            </p>
           </div>
           
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search Input */}
+            <div className="relative flex-1 group">
+              <Search 
+                className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" 
+                size={20} 
+              />
               <input 
                 type="text"
-                placeholder="Search by LR Number, Owner Name, or Wallet Address (0x...)"
-                className="w-full bg-white/10 dark:bg-slate-100 border border-white/20 dark:border-slate-200 rounded-2xl py-5 pl-12 pr-4 text-sm font-medium outline-none focus:ring-4 ring-blue-500/30 transition-all placeholder:text-slate-400"
+                placeholder="Search by LR, Owner, or Wallet (0x...)"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 md:py-5 pl-14 pr-4 text-sm font-medium outline-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-slate-500"
                 value={searchTerm}
                 onChange={handleSearchChange}
               />
             </div>
             
+            {/* Filter Dropdown */}
             <select 
-              className="bg-white/10 dark:bg-slate-100 border border-white/20 dark:border-slate-200 rounded-2xl px-6 py-5 text-xs font-black uppercase tracking-widest outline-none cursor-pointer"
+              className="bg-white/5 border border-white/10 rounded-2xl px-8 py-4 md:py-5 text-[11px] font-black uppercase tracking-widest outline-none cursor-pointer focus:border-blue-500 transition-all appearance-none"
               value={filterType}
               onChange={handleFilterChange}
             >
-              <option value="all" className="text-slate-900">All Records</option>
-              <option value="verified" className="text-slate-900">Verified Only</option>
-              <option value="pending" className="text-slate-900">Pending Review</option>
+              <option value="all" className="bg-slate-900">All Records</option>
+              <option value="verified" className="bg-slate-900">Verified Only</option>
+              <option value="pending" className="bg-slate-900">Pending Review</option>
             </select>
           </div>
         </div>
-        <div className="absolute -right-20 -bottom-20 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
+
+        {/* Abstract Background Decoration */}
+        <div className="absolute -right-10 -top-10 w-64 h-64 bg-blue-600/10 rounded-full blur-[100px]" />
+        <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-emerald-600/5 rounded-full blur-[80px]" />
       </div>
 
-      {/* 2. Results Grid */}
-      <div className="grid grid-cols-1 gap-4">
-        <div className="flex items-center justify-between px-4">
+      {/* 2. Stats Summary Line */}
+      <div className="flex items-center justify-between px-4">
+        <div className="flex items-center gap-2">
+          <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse" />
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            Showing {filteredResults.length} Secure Entries
+            Found {filteredResults.length} Assets
           </p>
         </div>
+        <div className="hidden md:block">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+            Ministry of Lands • Ledger 2.4.0
+          </p>
+        </div>
+      </div>
 
+      {/* 3. Results Section */}
+      <div className="space-y-4 md:space-y-6">
         {isLoading ? (
-          <div className="py-20 text-center space-y-4">
-             <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-             <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Accessing Distributed Data...</p>
+          <div className="py-32 text-center space-y-6 bg-white dark:bg-slate-900/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800">
+             <div className="relative inline-block">
+                <Loader2 className="animate-spin text-blue-600" size={48} />
+                <div className="absolute inset-0 blur-xl bg-blue-500/20 animate-pulse" />
+             </div>
+             <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.25em]">
+               Decrypting Distributed Ledger Data...
+             </p>
           </div>
         ) : filteredResults.length > 0 ? (
-          filteredResults.map((land) => (
-            <div key={land.id} className="bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 hover:shadow-xl hover:border-blue-500/30 transition-all group">
-              <div className="flex flex-col lg:flex-row items-center justify-between gap-8">
-                
-                {/* Land Identity */}
-                <div className="flex items-center gap-6 flex-1">
-                  <div className="h-16 w-16 bg-slate-50 dark:bg-slate-900 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                    <Map size={28} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black dark:text-white tracking-tight italic uppercase">{land.lrNumber}</h3>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter flex items-center gap-1">
-                        <Database size={12} /> On-Chain ID: {land.onChainId ?? "N/A"}
-                      </span>
-                      <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${
-                        land.verificationStatus === 'verified' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
-                      }`}>
-                        {land.verificationStatus}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Owner Info */}
-                <div className="flex flex-col lg:items-end flex-1">
-                    <div className="flex items-center gap-2 text-slate-900 dark:text-white font-black text-sm">
-                        <User size={14} className="text-blue-600" />
-                        {land.owner?.fullName ?? "Unknown Owner"}
-                    </div>
-                    <p className="text-[10px] font-mono text-slate-400 mt-1 truncate w-48 text-right">
-                        {land.owner?.walletAddress ?? "No Wallet Linked"}
-                    </p>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-8 px-8 border-x border-slate-100 dark:border-slate-900 hidden xl:grid">
-                    <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Size (Acres)</p>
-                        <p className="text-sm font-black dark:text-white">{land.sizeInAcres}</p>
-                    </div>
-                    <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Valuation</p>
-                        <p className="text-sm font-black text-emerald-600">
-                          {land.priceInKsh ? `KES ${land.priceInKsh.toLocaleString()}` : "Not for Sale"}
-                        </p>
-                    </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                    <button type="button" className="p-4 bg-slate-50 dark:bg-slate-900 text-slate-400 hover:text-blue-600 rounded-2xl transition-all">
-                        <History size={18} />
-                    </button>
-                    <button type="button" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-lg">
-                        View Full Details
-                        <ChevronRight size={14} />
-                    </button>
-                </div>
-              </div>
-            </div>
-          ))
+          <div className="grid grid-cols-1 gap-4">
+            {filteredResults.map((land) => (
+              <RegistryCard key={land.id} land={land} />
+            ))}
+          </div>
         ) : (
-          <div className="py-32 text-center bg-slate-50 dark:bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-slate-100 dark:border-slate-800">
-            <ShieldCheck size={48} className="mx-auto text-slate-300 mb-4" />
-            <p className="text-slate-500 font-black uppercase text-xs tracking-widest">No matching records found in the National Registry</p>
+          <div className="py-32 text-center bg-slate-50 dark:bg-slate-900/20 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-slate-800">
+            <ShieldCheck size={56} className="mx-auto text-slate-200 dark:text-slate-700 mb-6" />
+            <h3 className="text-slate-900 dark:text-white font-black uppercase text-sm tracking-widest">No Matches Found</h3>
+            <p className="text-slate-400 font-medium text-xs mt-2">
+              Try adjusting your search terms or filters
+            </p>
           </div>
         )}
       </div>

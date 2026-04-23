@@ -7,7 +7,7 @@ import {
   getMySales,
   finalizeTransfer,
   getTransferById
-} from "./transfer.controller";
+} from "./controllers/index";
 
 import {
   citizenAuth,
