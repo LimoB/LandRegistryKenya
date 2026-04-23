@@ -4,56 +4,64 @@ import type { Land } from "../../features/lands/landApi";
 
 interface LandCardProps {
   land: Land;
-  isProcessing: boolean;
+  // Use 'any' or 'string | number | null' to match your API ID type
+  processingId: string | number | null; 
   onApprove: (land: Land) => void;
 }
 
-const LandCard: React.FC<LandCardProps> = ({ land, isProcessing, onApprove }) => {
+const LandCard: React.FC<LandCardProps> = ({ land, processingId, onApprove }) => {
+  // Check if this specific card is being processed
+  // Using == allows comparison if one is a string "1" and other is number 1
+  const isThisLandLoading = processingId !== null && processingId == land.id;
+  
+  // Stop other clicks if any land is loading
+  const isAnyLoading = processingId !== null;
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-[2.5rem] flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-xl hover:shadow-slate-200/50 dark:hover:shadow-none transition-all group">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-[2.5rem] flex flex-col md:flex-row md:items-center justify-between gap-6 hover:shadow-xl transition-all group">
       
-      {/* Visual & Info Section */}
+      {/* Land Info */}
       <div className="flex items-start gap-6">
-        <div className="h-20 w-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-400 group-hover:bg-amber-50 dark:group-hover:bg-amber-900/20 group-hover:text-amber-600 transition-colors">
+        <div className="h-20 w-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-400 group-hover:text-amber-600 transition-colors">
           <FileCheck size={32} />
         </div>
         
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <h3 className="font-mono text-xl font-black dark:text-white tracking-tight">
+            <h3 className="font-mono text-xl font-black dark:text-white uppercase">
               {land.lrNumber}
             </h3>
             <span className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[9px] font-black uppercase rounded-lg">
-              Pending Mint
+              Pending
             </span>
           </div>
           
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 font-bold uppercase mt-2">
             <span className="flex items-center gap-1.5">
-              <MapPin size={12} /> {land.county} {land.constituency ? `| ${land.constituency}` : ''}
+              <MapPin size={12} /> {land.county}
             </span>
             <span className="flex items-center gap-1.5">
               <Clock size={12} /> {new Date(land.createdAt).toLocaleDateString()}
             </span>
-            <span className="text-amber-600/80 font-black">{land.landType}</span>
+            <span className="text-amber-600 font-black">{land.landType}</span>
           </div>
 
           <a 
             href={`https://ipfs.io/ipfs/${land.ipfsDocHash}`} 
             target="_blank" 
             rel="noreferrer" 
-            className="inline-flex items-center gap-2 text-[10px] text-blue-600 dark:text-blue-400 font-black mt-4 uppercase hover:underline decoration-2 underline-offset-4"
+            className="inline-flex items-center gap-2 text-[10px] text-blue-600 font-black mt-4 uppercase hover:underline"
           >
-            <ExternalLink size={14} /> Open Digital Deed (IPFS)
+            <ExternalLink size={14} /> View Documents
           </a>
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Actions */}
       <div className="flex items-center gap-3 pt-4 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
         <button 
           type="button"
-          disabled={isProcessing} 
+          disabled={isAnyLoading} 
           className="px-6 py-4 text-xs font-black uppercase text-slate-400 hover:text-red-500 transition-colors disabled:opacity-30"
         >
           Reject
@@ -62,13 +70,13 @@ const LandCard: React.FC<LandCardProps> = ({ land, isProcessing, onApprove }) =>
         <button 
           type="button"
           onClick={() => onApprove(land)}
-          disabled={isProcessing}
-          className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-5 rounded-[1.5rem] flex items-center gap-3 font-black text-xs uppercase shadow-xl shadow-amber-500/20 hover:shadow-amber-500/40 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+          disabled={isAnyLoading}
+          className="bg-amber-500 hover:bg-amber-600 text-white px-8 py-5 rounded-[1.5rem] flex items-center gap-3 font-black text-xs uppercase shadow-xl transition-all disabled:opacity-50 disabled:grayscale"
         >
-          {isProcessing ? (
+          {isThisLandLoading ? (
             <>
               <Loader2 className="animate-spin" size={18} />
-              <span>Minting...</span>
+              <span>Updating...</span>
             </>
           ) : (
             <>

@@ -5,7 +5,8 @@ import {
   transferRequests,
   auditLogs,
   payments,
-  landOwnershipHistory
+  landOwnershipHistory,
+  verificationTokens
 } from "./schema";
 
 import bcrypt from "bcrypt";
@@ -14,96 +15,140 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function seed() {
-  console.log("Starting Kenyan Land Registry Seed...");
+  console.log("Starting Kenyan Land Registry Clean & Seed...");
 
-  const hashedPassword = await bcrypt.hash("password123", 10);
+  // 1. CLEAN UP (Delete existing data in order of constraints)
+  try {
+    console.log("Wiping database tables...");
+    await db.delete(auditLogs);
+    await db.delete(payments);
+    await db.delete(transferRequests);
+    await db.delete(landOwnershipHistory);
+    await db.delete(lands);
+    await db.delete(verificationTokens);
+    await db.delete(users);
+    console.log("Database cleared.");
+  } catch (e) {
+    console.error("Error clearing database:", e);
+  }
+
+  /* ================= PASSWORD HASH FUNCTION ================= */
+  const hash = async (password: string) => {
+    return await bcrypt.hash(password, 10);
+  };
 
   try {
-    /* ============================
-       1. USERS
-    ============================ */
-    console.log("Seeding Users...");
+    /* ================= 2. USERS ================= */
+    console.log("Seeding 6 Users (1 Admin, 2 Officers, 3 Citizens)...");
 
     const insertedUsers = await db.insert(users).values([
       {
-        fullName: "Ministry Admin",
+        // INDEX 0
+        fullName: "System Admin",
         email: "admin@registry.go.ke",
-        idNumber: "11112222",
-        walletAddress: "0xdb941125fd848c03cfa27dc1e32d5a2e0e25f6e1",
-        password: hashedPassword,
+        idNumber: "11110000",
+        walletAddress: "0xC912c42a6282F446c6F979CA44D9612eC9B82102".toLowerCase(),
+        password: await hash("password123"),
         role: "admin",
         isVerified: true,
         emailVerifiedAt: new Date()
       },
       {
+        // INDEX 1
+        fullName: "Officer Sarah Wanjiku",
+        email: "sarah.officer@registry.go.ke",
+        idNumber: "22220001",
+        walletAddress: "0xD161A24947AE0b2695d1d89B6e16A3ab5E52b331".toLowerCase(),
+        password: await hash("password123"),
+        role: "land_officer",
+        isVerified: true,
+        emailVerifiedAt: new Date()
+      },
+      {
+        // INDEX 2
+        fullName: "Officer David Omolo",
+        email: "david.officer@registry.go.ke",
+        idNumber: "22220002",
+        walletAddress: "0x5609019b4948b03106E46c716F0A979182Bf45F4".toLowerCase(),
+        password: await hash("password123"),
+        role: "land_officer",
+        isVerified: true,
+        emailVerifiedAt: new Date()
+      },
+      {
+        // INDEX 3
         fullName: "Citizen Limo",
         email: "citizenlim07@gmail.com",
-        idNumber: "33334444",
-        walletAddress: "0xcb486a177511be0c2d6847a3d047732d8fb1f994bff25fa64c03e32d7caa4728",
-        password: hashedPassword,
+        idNumber: "33330001",
+        walletAddress: "0xB8B41E5Fb401d73C6C5a859C72BE72521beE09d9".toLowerCase(),
+        password: await hash("password123"),
         role: "citizen",
         isVerified: true,
         emailVerifiedAt: new Date()
       },
       {
-        fullName: "Sarah Wanjiku",
-        email: "sarah.wanjiku@outlook.com",
-        idNumber: "55556666",
-        walletAddress: "0xa69aa1d44c401f0009da981a9d3aff6e6b89fde7a68ba90036e24151d34c0623",
-        password: hashedPassword,
-        role: "land_officer",
+        // INDEX 4
+        fullName: "John Kamau",
+        email: "john.citizen@gmail.com",
+        idNumber: "33330002",
+        walletAddress: "0xD0963882f03b63fb93FAdd95Df6e24B15e8fae66".toLowerCase(),
+        password: await hash("password123"),
+        role: "citizen",
+        isVerified: true,
+        emailVerifiedAt: new Date()
+      },
+      {
+        // INDEX 5
+        fullName: "Mary Atieno",
+        email: "mary.citizen@gmail.com",
+        idNumber: "33330003",
+        walletAddress: "0x2a5f97717ce9cFEd3aC7e626f5B12D10d6F3e131".toLowerCase(),
+        password: await hash("password123"),
+        role: "citizen",
         isVerified: true,
         emailVerifiedAt: new Date()
       }
     ]).returning();
 
-    const [admin, citizen, officer] = insertedUsers;
+    const [admin, officer1, officer2, citizen1, citizen2, citizen3] = insertedUsers;
 
-    /* ============================
-       2. LANDS
-    ============================ */
+    /* ================= 3. LANDS ================= */
     console.log("Seeding Lands...");
 
     const insertedLands = await db.insert(lands).values([
       {
-        ownerId: citizen.id,
+        ownerId: citizen1.id,
         lrNumber: "LAI/NYAHU/2026/001",
         county: "Laikipia",
         constituency: "Laikipia West",
-        sizeInAcres: "5.5000",
+        sizeInAcres: "5.0000",
         landType: "agricultural",
-        verificationStatus: "verified",
-        verifiedBy: officer.id,
-        verifiedAt: new Date(),
-        onChainId: 1,
-        blockchainTxHash: "0xseedtx1",
-        network: "ganache",
+        verificationStatus: "pending", // Set to pending to test your VerifyLands page
         isForSale: true,
         priceInKsh: "2500000.00"
       },
       {
-        ownerId: officer.id,
+        ownerId: citizen2.id,
         lrNumber: "NAI/KASA/2026/492",
         county: "Nairobi",
         constituency: "Kasarani",
         sizeInAcres: "0.2500",
         landType: "residential",
-        verificationStatus: "verified",
-        verifiedBy: officer.id,
-        verifiedAt: new Date(),
-        onChainId: 2,
-        blockchainTxHash: "0xseedtx2",
-        network: "ganache",
+        verificationStatus: "pending",
         isForSale: false
       },
       {
-        ownerId: citizen.id,
+        ownerId: citizen3.id,
         lrNumber: "MSA/NYA/2026/112",
         county: "Mombasa",
         constituency: "Nyali",
         sizeInAcres: "1.2000",
         landType: "commercial",
-        verificationStatus: "pending",
+        verificationStatus: "verified",
+        verifiedBy: officer1.id,
+        verifiedAt: new Date(),
+        onChainId: 3,
+        blockchainTxHash: "0xinitial_mint_hash",
         isForSale: true,
         priceInKsh: "15000000.00"
       }
@@ -111,124 +156,59 @@ async function seed() {
 
     const [land1, land2, land3] = insertedLands;
 
-    /* ============================
-       3. OWNERSHIP HISTORY
-    ============================ */
+    /* ================= 4. OWNERSHIP HISTORY ================= */
     console.log("Seeding Ownership History...");
 
     await db.insert(landOwnershipHistory).values([
-      {
-        landId: land1.id,
-        fromOwnerId: citizen.id,
-        toOwnerId: citizen.id,
-        fromWallet: citizen.walletAddress,
-        toWallet: citizen.walletAddress,
-        mpesaRef: null,
-        blockchainTxHash: "0xhist1"
+      { 
+        landId: land1.id, 
+        fromOwnerId: citizen1.id, 
+        toOwnerId: citizen1.id, 
+        fromWallet: citizen1.walletAddress, 
+        toWallet: citizen1.walletAddress, 
+        blockchainTxHash: "0xhist1" 
       },
-      {
-        landId: land2.id,
-        fromOwnerId: officer.id,
-        toOwnerId: officer.id,
-        fromWallet: officer.walletAddress,
-        toWallet: officer.walletAddress,
-        mpesaRef: null,
-        blockchainTxHash: "0xhist2"
-      },
-      {
-        landId: land3.id,
-        fromOwnerId: citizen.id,
-        toOwnerId: citizen.id,
-        fromWallet: citizen.walletAddress,
-        toWallet: citizen.walletAddress,
-        mpesaRef: null,
-        blockchainTxHash: "0xhist3"
+      { 
+        landId: land3.id, 
+        fromOwnerId: citizen3.id, 
+        toOwnerId: citizen3.id, 
+        fromWallet: citizen3.walletAddress, 
+        toWallet: citizen3.walletAddress, 
+        blockchainTxHash: "0xhist3" 
       }
     ]);
 
-    /* ============================
-       4. TRANSFER REQUESTS
-    ============================ */
+    /* ================= 5. TRANSFER REQUESTS ================= */
     console.log("Seeding Transfer Requests...");
 
-    const insertedTransfers = await db.insert(transferRequests).values([
+    await db.insert(transferRequests).values([
       {
-        landId: land1.id,
-        sellerId: citizen.id,
-        buyerId: officer.id,
+        landId: land3.id,
+        sellerId: citizen3.id,
+        buyerId: citizen1.id,
         status: "pending",
         blockchainStatus: "pending"
-      },
-      {
-        landId: land2.id,
-        sellerId: officer.id,
-        buyerId: admin.id,
-        status: "approved",
-        blockchainStatus: "submitted"
-      },
-      {
-        landId: land1.id,
-        sellerId: citizen.id,
-        buyerId: admin.id,
-        status: "rejected",
-        blockchainStatus: "failed"
-      }
-    ]).returning();
-
-    const [t1, t2, t3] = insertedTransfers;
-
-    /* ============================
-       5. PAYMENTS
-    ============================ */
-    console.log("Seeding Payments...");
-
-    await db.insert(payments).values([
-      {
-        transferRequestId: t2.id,
-        landId: land2.id,
-        operationType: "transfer",
-        amount: "5000000.00",
-        paymentMethod: "mpesa",
-        paymentStatus: "completed",
-        mpesaReceiptCode: "SJK9876543",
-        confirmedAt: new Date(),
-        confirmedBy: "mpesa"
       }
     ]);
 
-    /* ============================
-       6. AUDIT LOGS
-    ============================ */
+    /* ================= 6. AUDIT LOGS ================= */
     console.log("Seeding Audit Logs...");
-
     await db.insert(auditLogs).values([
       {
-        actionType: "LAND_VERIFIED",
-        performedBy: officer.id,
-        landId: land1.id,
-        metadata: { note: "Land verified by officer" },
-        blockchainTxHash: "0xaudit1"
-      },
-      {
-        actionType: "TRANSFER_APPROVED",
         performedBy: admin.id,
-        landId: land2.id,
-        metadata: { transferId: t2.id },
-        blockchainTxHash: "0xaudit2"
-      },
-      {
-        actionType: "PAYMENT_COMPLETED",
-        performedBy: admin.id,
-        landId: land2.id,
+        actionType: "DATABASE_SEED",
         metadata: {
-          amount: 5000000,
-          method: "mpesa"
-        },
-        blockchainTxHash: "0xaudit3"
+          resource: "SYSTEM",
+          details: "Initial system seed completed successfully"
+        }
       }
     ]);
 
-    console.log("Seed Complete");
+    console.log("Seed Complete:");
+    console.log("- 6 Users created");
+    console.log("- 3 Land parcels created (2 Pending, 1 Verified)");
+    console.log("- Ownership History and Transfer Requests initialized");
+    
     process.exit(0);
 
   } catch (error) {

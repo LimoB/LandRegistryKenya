@@ -17,12 +17,12 @@ export const auditRouter: Router = Router();
 /* ================================
    ADMIN ONLY (FULL LOG ACCESS)
 ================================ */
-auditRouter.get("/", adminAuth, getAuditLogs);
+auditRouter.get("/", getAuditLogs);// adminAuth,
 
 /* ================================
    FILTERED SEARCH (ADMIN)
 ================================ */
-auditRouter.get("/filter", adminAuth, getFilteredAuditLogs);
+auditRouter.get("/filter", getFilteredAuditLogs);// adminAuth,
 
 /* ================================
    LAND HISTORY

@@ -1,21 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+/**
+ * @title LandRegistry
+ * @dev Manages land registration and ownership transfers on the blockchain.
+ */
 contract LandRegistry {
 
     /* ============================
-        ROLES
+        ROLES & ACCESS CONTROL
     ============================ */
-    address public landOfficer;
     address public admin;
+    mapping(address => bool) public isLandOfficer;
 
     modifier onlyOfficer() {
-        require(msg.sender == landOfficer, "Only Land Officer allowed");
+        require(
+            isLandOfficer[msg.sender] || msg.sender == admin, 
+            "Access denied: Only Land Officer or Admin allowed"
+        );
         _;
     }
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Only Admin allowed");
+        require(msg.sender == admin, "Access denied: Only Admin allowed");
         _;
     }
 
@@ -24,10 +31,10 @@ contract LandRegistry {
     ============================ */
 
     struct LandParcel {
-        uint id;                  // matches DB onChainId
-        string lrNumber;          // matches Drizzle lrNumber
-        address owner;            // walletAddress from users table
-        string ipfsDocHash;       // stored document hash
+        uint id;                  
+        string lrNumber;          
+        address owner;            
+        string ipfsDocHash;       
         bool isVerified;
         uint createdAt;
     }
@@ -36,7 +43,7 @@ contract LandRegistry {
         address from;
         address to;
         uint timestamp;
-        string mpesaRef;
+        string mpesaRef;          
     }
 
     /* ============================
@@ -47,11 +54,11 @@ contract LandRegistry {
 
     mapping(uint => LandParcel) public lands;
     mapping(uint => OwnershipRecord[]) public ownershipHistory;
-    mapping(string => uint) public lrToId; // fast lookup
+    mapping(string => uint) public lrToId; 
     mapping(string => bool) public registeredLR;
 
     /* ============================
-        EVENTS (IMPORTANT FOR BACKEND)
+        EVENTS
     ============================ */
 
     event LandRegistered(
@@ -68,37 +75,52 @@ contract LandRegistry {
         string mpesaRef
     );
 
+    event OfficerStatusChanged(address indexed officer, bool status);
+
     /* ============================
         CONSTRUCTOR
     ============================ */
 
     constructor() {
         admin = msg.sender;
-        landOfficer = msg.sender;
+        // The deployer is an officer by default
+        isLandOfficer[msg.sender] = true;
     }
 
     /* ============================
         ADMIN CONTROLS
     ============================ */
 
-    function setOfficer(address _officer) external onlyAdmin {
-        require(_officer != address(0), "Invalid officer address");
-        landOfficer = _officer;
+    /**
+     * @dev Allows admin to add or remove officers.
+     * This fixes the "Access Denied" issue by letting you authorize new wallets.
+     */
+    function setOfficerStatus(address _officer, bool _status) external onlyAdmin {
+        require(_officer != address(0), "Invalid address");
+        isLandOfficer[_officer] = _status;
+        emit OfficerStatusChanged(_officer, _status);
+    }
+
+    /**
+     * @dev Transfer admin rights to a new address.
+     */
+    function transferAdmin(address _newAdmin) external onlyAdmin {
+        require(_newAdmin != address(0), "Invalid address");
+        admin = _newAdmin;
     }
 
     /* ============================
-        1. REGISTER LAND (MINT ON CHAIN)
-        Called AFTER officer verification in backend
+        1. REGISTER LAND (MINT)
     ============================ */
 
-    function registerInitialLand(
+    function registerLand(
         address _owner,
         string memory _lrNumber,
         string memory _ipfsHash
     ) external onlyOfficer returns (uint) {
 
-        require(!registeredLR[_lrNumber], "Land already exists on-chain");
-        require(_owner != address(0), "Invalid owner");
+        require(!registeredLR[_lrNumber], "Land already exists on blockchain");
+        require(_owner != address(0), "Invalid owner address");
 
         landCount++;
 
@@ -121,7 +143,6 @@ contract LandRegistry {
 
     /* ============================
         2. TRANSFER OWNERSHIP
-        Called AFTER M-Pesa + DB approval
     ============================ */
 
     function transferOwnership(
@@ -132,12 +153,12 @@ contract LandRegistry {
 
         LandParcel storage land = lands[_landId];
 
-        require(land.id != 0, "Land does not exist");
-        require(_newOwner != address(0), "Invalid new owner");
+        require(land.id != 0, "Land record not found");
+        require(_newOwner != address(0), "Invalid new owner address");
+        require(land.owner != _newOwner, "New owner is the same as current owner");
 
         address previousOwner = land.owner;
 
-        // store history
         ownershipHistory[_landId].push(
             OwnershipRecord({
                 from: previousOwner,
@@ -147,22 +168,23 @@ contract LandRegistry {
             })
         );
 
-        // update ownership
         land.owner = _newOwner;
 
         emit OwnershipTransferred(_landId, previousOwner, _newOwner, _mpesaRef);
     }
 
     /* ============================
-        3. VIEW FUNCTIONS (IMPORTANT FOR BACKEND)
+        3. VIEW FUNCTIONS
     ============================ */
 
     function getLand(uint _id) external view returns (LandParcel memory) {
+        require(lands[_id].id != 0, "Record does not exist");
         return lands[_id];
     }
 
     function getLandByLR(string memory _lr) external view returns (LandParcel memory) {
         uint id = lrToId[_lr];
+        require(id != 0, "LR Number not found");
         return lands[id];
     }
 

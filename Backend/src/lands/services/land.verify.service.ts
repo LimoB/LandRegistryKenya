@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { lands, auditLogs } from "../../drizzle/schema";
-import { registerLandOnChainService } from "../../blockchain/blockchain.service";
+import { registerLandOnChainService } from "../../blockchain/services";
 
 /**
  * Verifies land locally and mints the record on the blockchain

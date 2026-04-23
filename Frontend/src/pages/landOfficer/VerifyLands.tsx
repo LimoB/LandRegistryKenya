@@ -5,92 +5,115 @@ import {
   type Land 
 } from "../../features/lands/landApi";
 import { useBlockchain } from "../../features/blockchain/useBlockchain";
+import { ethers } from "ethers";
 import { FileSearch, CheckCircle, Loader2 } from "lucide-react";
 import LandCard from "../../components/officer/LandCard";
 
 /* TYPES */
+// Fixed: replaced 'any' with 'unknown' for the data field
 interface TransactionError {
   reason?: string;
   message?: string;
+  data?: unknown;
 }
 
 const VerifyLands: React.FC = () => {
   const { data: lands, isLoading } = useGetLandsQuery();
-  
-  // verifyLand mutation accepts a 'number' (id) per your landApi.ts
-  const [verifyLand, { isLoading: isBackendUpdating }] = useVerifyLandMutation();
+  const [verifyLand] = useVerifyLandMutation();
   const { getContract, connectWallet } = useBlockchain();
   
-  const [isMinting, setIsMinting] = useState(false);
+  const [processingId, setProcessingId] = useState<string | number | null>(null);
 
-  // Filter for lands that need verification
   const pendingLands = lands?.filter(land => land.verificationStatus === 'pending') || [];
 
   const handleApproveAndMint = async (land: Land) => {
-    setIsMinting(true);
+    setProcessingId(land.id);
+    
+    console.log("Process started for Land ID:", land.id);
+    
     try {
-      // 1. Prepare Blockchain Connection
+      // 1. Clean and Validate Address
+      const rawAddress = land.owner?.walletAddress?.trim();
+      if (!rawAddress) {
+        throw new Error("The owner does not have a wallet address assigned.");
+      }
+
+      const validatedAddress = ethers.getAddress(rawAddress.toLowerCase());
+
+      // 2. Blockchain Connection
       await connectWallet();
       const contract = await getContract();
 
-      console.log(`[Blockchain] Initiating mint for LR: ${land.lrNumber}`);
-
-      // 2. Execute Smart Contract Call
+      // 3. Execution
+      console.log("Initiating transaction for LR:", land.lrNumber);
+      
       const transaction = await contract.registerLand(
-        land.owner?.walletAddress || "0x0000000000000000000000000000000000000000", 
+        validatedAddress, 
         land.lrNumber,
         land.ipfsDocHash || "N/A"
       );
 
-      // Wait for block confirmation
+      console.log("Transaction sent. Hash:", transaction.hash);
       await transaction.wait();
       
-      // 3. Update Database via API
-      // Passing only land.id to match your Mutation definition
+      // 4. Backend Sync
       await verifyLand(land.id).unwrap();
-      
-      alert(`SUCCESS!\nLR: ${land.lrNumber}\nStatus: Secured on Distributed Ledger`);
+      alert(`Success! ${land.lrNumber} is now officially registered.`);
       
     } catch (err: unknown) {
+      // Fixed: Cast 'err' to 'TransactionError' so we avoid 'any'
       const error = err as TransactionError;
-      console.error("Verification failed", error);
-      alert(error.reason || error.message || "Transaction failed. Please check your wallet connection.");
+      console.error("Critical error in handleApproveAndMint:", error);
+      
+      let errorMessage = "An unexpected error occurred.";
+
+      if (error.message?.includes("estimateGas") || error.message?.includes("Internal JSON-RPC error")) {
+        errorMessage = "Blockchain Revert: You may not have permission to register land, or this LR Number already exists on-chain.";
+      } else if (error.message?.includes("bad address checksum")) {
+        errorMessage = "Address verification failed. The wallet address format is incorrect.";
+      } else if (error.reason) {
+        errorMessage = error.reason;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+        
+      alert(errorMessage);
     } finally {
-      setIsMinting(false);
+      setProcessingId(null);
     }
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-6">
-      {/* Header */}
       <div className="border-b border-slate-100 dark:border-slate-900 pb-6">
-        <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-          <FileSearch className="text-blue-600" /> Land Verification Queue
+        <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+          <FileSearch className="text-blue-600" /> New Land Requests
         </h1>
-        <p className="text-sm text-slate-500 mt-1 uppercase font-bold tracking-tighter">
-          Validating titles and generating blockchain digital twins
+        <p className="text-sm text-slate-500 mt-1 uppercase font-bold tracking-tight">
+          Review these records and save them to the permanent ledger
         </p>
       </div>
 
-      {/* Verification Queue */}
       <div className="grid grid-cols-1 gap-4">
         {isLoading ? (
           <div className="py-20 text-center text-slate-400 font-black uppercase text-xs">
-            <Loader2 className="animate-spin mx-auto mb-2" /> Loading Registry Data...
+            <Loader2 className="animate-spin mx-auto mb-2" /> Searching Records...
           </div>
         ) : pendingLands.length > 0 ? (
           pendingLands.map((land) => (
             <LandCard 
               key={land.id} 
               land={land} 
-              isProcessing={isMinting || isBackendUpdating}
+              processingId={processingId}
               onApprove={handleApproveAndMint}
             />
           ))
         ) : (
           <div className="py-24 text-center border-2 border-dashed border-slate-100 dark:border-slate-900 rounded-3xl">
             <CheckCircle className="mx-auto text-slate-200 mb-4" size={48} />
-            <p className="text-slate-400 font-black uppercase text-xs tracking-[0.2em]">Queue Clear: No Pending Records</p>
+            <p className="text-slate-400 font-black uppercase text-xs tracking-widest">
+              No records waiting for review
+            </p>
           </div>
         )}
       </div>

@@ -58,13 +58,13 @@ M-Pesa Integration: Secure off-chain payment processing for land transfers and f
 Identity: JWT-based authentication with Bcrypt hashing and mandatory email verification.
 
 🛠️ Tech Stack
-Layer	Technology
-Backend	Node.js, Express.js, TypeScript
-Blockchain	Solidity (^0.8.20), Ganache, Ethers.js
-Database	PostgreSQL, Drizzle ORM
-Storage	IPFS (Pinata / Local Gateway)
-Payments	M-Pesa Daraja API
-DevOps	Linux/Kali environment, Truffle
+Layer   Technology
+Backend Node.js, Express.js, TypeScript
+Blockchain  Solidity (^0.8.20), Ganache, Ethers.js
+Database    PostgreSQL, Drizzle ORM
+Storage IPFS (Pinata / Local Gateway)
+Payments    M-Pesa Daraja API
+DevOps  Linux/Kali environment, Truffle
 
 
 📂 Project Structure
