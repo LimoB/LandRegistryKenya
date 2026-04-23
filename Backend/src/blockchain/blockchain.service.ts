@@ -7,138 +7,148 @@ import {
 } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import LandRegistry from "./artifacts/LandRegistry.json";
+import { ethers } from "ethers";
 
 /* ============================================================
-   ENV SETUP
+   ENV SETUP - MATCHING YOUR .ENV
 ============================================================ */
 const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS;
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:7545";
+const RPC_URL = process.env.BLOCKCHAIN_RPC_URL || "http://127.0.0.1:7545"; 
+const PRIVATE_KEY = process.env.OFFICER_PRIVATE_KEY; 
 
 if (!CONTRACT_ADDRESS) {
+  console.error("[CRITICAL] LAND_REGISTRY_ADDRESS missing in .env");
   throw new Error("LAND_REGISTRY_ADDRESS missing in .env");
 }
 
 /* ============================================================
-   PROVIDER + CONTRACT
+   PROVIDER, SIGNER + CONTRACT
 ============================================================ */
-import { ethers } from "ethers";
-
 export const provider = new ethers.JsonRpcProvider(RPC_URL);
 
-export const contract = new ethers.Contract(
-  CONTRACT_ADDRESS,
-  LandRegistry.abi,
-  provider
-);
+/**
+ * HELPER: Returns a contract instance with a Signer (Wallet)
+ */
+export const getAuthorizedContract = () => {
+  if (!PRIVATE_KEY) {
+    throw new Error("[BC-SERVICE] OFFICER_PRIVATE_KEY is missing in .env.");
+  }
+  const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+  return new ethers.Contract(CONTRACT_ADDRESS!, LandRegistry.abi, wallet);
+};
+
+/**
+ * STANDARD CONTRACT (READ-ONLY)
+ */
+export const contract = new ethers.Contract(CONTRACT_ADDRESS!, LandRegistry.abi, provider);
+
+/* ============================================================
+   DEBUG: INTERFACE INSPECTION
+============================================================ */
+const debugInterface = () => {
+  console.log("--- Blockchain Interface Debug ---");
+  console.log("Contract Address:", CONTRACT_ADDRESS);
+  const abiFunctions = LandRegistry.abi
+    .filter((item: any) => item.type === "function")
+    .map((item: any) => item.name);
+  console.log("Functions in JSON ABI:", abiFunctions);
+  console.log("----------------------------------");
+};
+debugInterface();
 
 /* ============================================================
    WALLET CACHE
 ============================================================ */
 const walletCache = new Map<string, number>();
 
-export const resolveUserIdByWallet = async (
-  wallet: string
-): Promise<number | null> => {
-  if (walletCache.has(wallet)) return walletCache.get(wallet)!;
+export const resolveUserIdByWallet = async (wallet: string): Promise<number | null> => {
+  if (!wallet) return null;
+  const cleanWallet = wallet.toLowerCase();
+  if (walletCache.has(cleanWallet)) return walletCache.get(cleanWallet)!;
 
   const user = await db.query.users.findFirst({
-    where: eq(users.walletAddress, wallet),
+    where: eq(users.walletAddress, cleanWallet),
   });
 
   if (user?.id) {
-    walletCache.set(wallet, user.id);
+    walletCache.set(cleanWallet, user.id);
     return user.id;
   }
-
   return null;
 };
 
 /* ============================================================
-   BLOCKCHAIN EVENT CHECK
-============================================================ */
-const isProcessed = async (txHash: string) => {
-  const event = await db.query.blockchainEvents.findFirst({
-    where: eq(blockchainEvents.txHash, txHash),
-  });
-
-  return !!event?.processed;
-};
-
-/* ============================================================
-   SAVE OR UPDATE EVENT (IDEMPOTENT + RETRY SAFE)
-============================================================ */
-export const saveBlockchainEvent = async (params: {
-  eventName: string;
-  txHash: string;
-  blockNumber?: number;
-  payload: any;
-}) => {
-  const existing = await db.query.blockchainEvents.findFirst({
-    where: eq(blockchainEvents.txHash, params.txHash),
-  });
-
-  // already processed → fully skip
-  if (existing?.processed) return;
-
-  // exists but not processed → retry scenario
-  if (existing && !existing.processed) return;
-
-  await db.insert(blockchainEvents).values({
-    eventName: params.eventName,
-    txHash: params.txHash,
-    blockNumber: params.blockNumber,
-    payload: params.payload,
-    processed: false,
-  });
-};
-
-/* ============================================================
-   REGISTER LAND ON CHAIN
+   1. REGISTER LAND ON CHAIN (FIXED FOR ENS ERROR)
 ============================================================ */
 export const registerLandOnChainService = async (
   ownerWallet: string,
   lrNumber: string,
   ipfsHash: string
 ) => {
-  const tx = await contract.registerLand(
-    ownerWallet,
-    lrNumber,
-    ipfsHash
-  );
+  console.log(`[BC-SERVICE] Preparing Mint for LR: ${lrNumber}`);
 
-  const receipt = await tx.wait();
+  try {
+    // ENS FIX: Validate the Ethereum Address before calling the contract
+    if (!ownerWallet || !ethers.isAddress(ownerWallet)) {
+      throw new Error(`INVALID_ADDRESS: The wallet address "${ownerWallet}" is invalid or undefined. This causes the ENS error.`);
+    }
 
-  return {
-    hash: receipt.hash,
-    blockNumber: receipt.blockNumber,
-  };
+    if (!lrNumber || !ipfsHash) {
+      throw new Error("INVALID_DATA: LR Number or IPFS Hash is missing.");
+    }
+
+    const authContract = getAuthorizedContract();
+    
+    // Explicitly call the function with validated data
+    const tx = await authContract.registerInitialLand(ownerWallet, lrNumber, ipfsHash);
+    console.log(`[BC-SERVICE] Transaction Sent! Hash: ${tx.hash}`);
+
+    const receipt = await tx.wait();
+    console.log(`[BC-SERVICE] Mined in block: ${receipt.blockNumber}`);
+
+    return {
+      hash: receipt.hash,
+      blockNumber: receipt.blockNumber,
+    };
+  } catch (error: any) {
+    console.error("[BC-SERVICE ERROR] Failed to register land on-chain:");
+    
+    // Catch the specific ENS lookup failure and provide a better message
+    if (error.message.includes("getEnsAddress") || error.message.includes("ENS")) {
+        throw new Error("Blockchain Error: Invalid Wallet Address provided (Network tried to resolve ENS on local chain). Check land owner's wallet.");
+    }
+    
+    throw error;
+  }
 };
 
 /* ============================================================
-   TRANSFER LAND ON CHAIN
+   2. TRANSFER LAND ON CHAIN
 ============================================================ */
 export const transferLandOnChainService = async (
   landOnChainId: number,
   toWallet: string,
   reference: string
 ) => {
-  const tx = await contract.transferOwnership(
-    landOnChainId,
-    toWallet,
-    reference
-  );
+  try {
+    if (!ethers.isAddress(toWallet)) {
+        throw new Error(`Invalid recipient address: ${toWallet}`);
+    }
 
-  const receipt = await tx.wait();
-
-  return {
-    hash: receipt.hash,
-    blockNumber: receipt.blockNumber,
-  };
+    const authContract = getAuthorizedContract();
+    const tx = await authContract.transferOwnership(landOnChainId, toWallet, reference);
+    const receipt = await tx.wait();
+    return { hash: receipt.hash, blockNumber: receipt.blockNumber };
+  } catch (error: any) {
+    console.error("[BC-SERVICE ERROR] Transfer Failed:", error.message);
+    throw error;
+  }
 };
 
 /* ============================================================
-   LAND REGISTERED EVENT
+   EVENT SYNC HANDLERS
 ============================================================ */
+
 export const handleLandRegisteredEvent = async (
   landId: bigint,
   lrNumber: string,
@@ -146,20 +156,21 @@ export const handleLandRegisteredEvent = async (
   ipfsHash: string,
   txHash: string
 ) => {
-  if (await isProcessed(txHash)) return;
+  console.log(`[EVENT] Syncing LandRegistered: ${lrNumber}`);
+  
+  const existing = await db.query.blockchainEvents.findFirst({
+    where: eq(blockchainEvents.txHash, txHash),
+  });
+  if (existing?.processed) return;
 
   const ownerId = await resolveUserIdByWallet(ownerWallet);
 
   await db.transaction(async (trx) => {
-    await saveBlockchainEvent({
+    await trx.insert(blockchainEvents).values({
       eventName: "LandRegistered",
       txHash,
-      payload: {
-        landId: Number(landId),
-        lrNumber,
-        ownerWallet,
-        ipfsHash,
-      },
+      payload: { landId: Number(landId), lrNumber, ownerWallet, ipfsHash },
+      processed: true
     });
 
     await trx
@@ -167,72 +178,46 @@ export const handleLandRegisteredEvent = async (
       .set({
         onChainId: Number(landId),
         verificationStatus: "verified",
-        ipfsDocHash: ipfsHash,
+        blockchainTxHash: txHash,
         ownerId: ownerId ?? undefined,
       })
       .where(eq(lands.lrNumber, lrNumber));
-
-    await trx
-      .update(blockchainEvents)
-      .set({ processed: true })
-      .where(eq(blockchainEvents.txHash, txHash));
   });
 };
 
-/* ============================================================
-   OWNERSHIP TRANSFER EVENT
-============================================================ */
 export const handleOwnershipTransferredEvent = async (
   landId: bigint,
-  fromWallet: string,
-  toWallet: string,
+  from: string,
+  to: string,
   mpesaRef: string,
   txHash: string
 ) => {
-  if (await isProcessed(txHash)) return;
+  console.log(`[EVENT] Syncing Transfer for Land ID: ${landId}`);
 
-  const fromOwnerId = await resolveUserIdByWallet(fromWallet);
-  const toOwnerId = await resolveUserIdByWallet(toWallet);
+  const fromOwnerId = await resolveUserIdByWallet(from);
+  const toOwnerId = await resolveUserIdByWallet(to);
 
   await db.transaction(async (trx) => {
-    await saveBlockchainEvent({
+    await trx.insert(blockchainEvents).values({
       eventName: "OwnershipTransferred",
       txHash,
-      payload: {
-        landId: Number(landId),
-        fromWallet,
-        toWallet,
-        mpesaRef,
-      },
+      payload: { landId: Number(landId), from, to, mpesaRef },
+      processed: true
     });
 
-    await trx
-      .update(lands)
-      .set({
-        ownerId: toOwnerId ?? undefined,
-        updatedAt: new Date(),
-      })
+    await trx.update(lands)
+      .set({ ownerId: toOwnerId ?? undefined })
       .where(eq(lands.onChainId, Number(landId)));
-
-    await trx
-      .update(landOwnershipHistory)
-      .set({ toDate: new Date() })
-      .where(eq(landOwnershipHistory.landId, Number(landId)));
 
     await trx.insert(landOwnershipHistory).values({
       landId: Number(landId),
-      fromOwnerId: fromOwnerId ?? null,
-      toOwnerId: toOwnerId ?? null,
-      fromWallet,
-      toWallet,
-      mpesaRef,
-      blockchainTxHash: txHash,
+      fromWallet: from,
+      toWallet: to,
+      fromOwnerId: fromOwnerId ?? undefined,
+      toOwnerId: toOwnerId ?? undefined,
+      mpesaRef: mpesaRef,          
+      blockchainTxHash: txHash,     
     });
-
-    await trx
-      .update(blockchainEvents)
-      .set({ processed: true })
-      .where(eq(blockchainEvents.txHash, txHash));
   });
 };
 
@@ -240,39 +225,21 @@ export const handleOwnershipTransferredEvent = async (
    START LISTENERS
 ============================================================ */
 export const startBlockchainService = () => {
-  console.log("Blockchain service started");
+  console.log("[BC-SYSTEM] Blockchain event listeners active...");
 
-  contract.on(
-    "LandRegistered",
-    async (landId, lrNumber, owner, ipfsHash, event) => {
-      try {
-        await handleLandRegisteredEvent(
-          landId,
-          lrNumber,
-          owner,
-          ipfsHash,
-          event.log.transactionHash
-        );
-      } catch (err) {
-        console.error("LandRegistered handler failed:", err);
-      }
+  contract.on("LandRegistered", async (landId, lrNumber, owner, ipfsHash, event) => {
+    try {
+      await handleLandRegisteredEvent(landId, lrNumber, owner, ipfsHash, event.log.transactionHash);
+    } catch (err) {
+      console.error("[LISTENER ERROR] LandRegistered Sync failed:", err);
     }
-  );
+  });
 
-  contract.on(
-    "OwnershipTransferred",
-    async (landId, from, to, mpesaRef, event) => {
-      try {
-        await handleOwnershipTransferredEvent(
-          landId,
-          from,
-          to,
-          mpesaRef,
-          event.log.transactionHash
-        );
-      } catch (err) {
-        console.error("OwnershipTransferred handler failed:", err);
-      }
+  contract.on("OwnershipTransferred", async (landId, from, to, mpesaRef, event) => {
+    try {
+      await handleOwnershipTransferredEvent(landId, from, to, mpesaRef, event.log.transactionHash);
+    } catch (err) {
+      console.error("[LISTENER ERROR] OwnershipTransferred Sync failed:", err);
     }
-  );
+  });
 };

@@ -21,22 +21,25 @@ import { upload } from "../middleware/upload";
 export const landRouter: Router = Router();
 
 /* ============================================================
-   GENERAL (ALL AUTHENTICATED USERS)
-============================================================ */
-
-// Get all lands
-landRouter.get("/", anyRoleAuth, getLands);
-
-// Get land by LR Number
-landRouter.get("/lr/:lrNumber", anyRoleAuth, getLandByLR);
-
-
-/* ============================================================
-   MARKETPLACE (BUYERS / PUBLIC AUTH USERS)
+   SPECIFIC COLLECTIONS (Move these up to avoid param collision)
 ============================================================ */
 
 // Get marketplace lands (FOR SALE + VERIFIED)
 landRouter.get("/marketplace", anyRoleAuth, getMarketplaceLands);
+
+// Get my lands (citizen dashboard)
+landRouter.get("/my-lands", citizenAuth, getMyLands);
+
+
+/* ============================================================
+   GENERAL READ ACTIONS
+============================================================ */
+
+// Get all lands (Admin/Officer overview)
+landRouter.get("/", anyRoleAuth, getLands);
+
+// Get land by LR Number (Dynamic param at bottom of GETs)
+landRouter.get("/lr/:lrNumber", anyRoleAuth, getLandByLR);
 
 
 /* ============================================================
@@ -44,15 +47,13 @@ landRouter.get("/marketplace", anyRoleAuth, getMarketplaceLands);
 ============================================================ */
 
 // Register land (with PDF upload)
+// NOTE: Ensure the frontend 'name' attribute in the form is "document"
 landRouter.post(
   "/register",
   citizenAuth,
-  upload.single("document"),
+  upload.single("document"), 
   registerLand
 );
-
-// Get my lands (citizen dashboard)
-landRouter.get("/my-lands", citizenAuth, getMyLands);
 
 // List land for sale
 landRouter.patch(
@@ -73,20 +74,11 @@ landRouter.patch(
    OFFICER ACTIONS
 ============================================================ */
 
-// Verify land (mint to blockchain)
+// Verify land (Mints to blockchain)
 landRouter.patch(
   "/verify/:id",
   officerAuth,
   verifyLand
 );
 
-
-/* ============================================================
-   FUTURE EXTENSIONS (READY HOOKS)
-============================================================ */
-
-// Transfer ownership (BLOCKCHAIN + DB sync)
-// landRouter.post("/transfer/:id", citizenAuth, transferLandOwnership);
-
-// Audit logs for land lifecycle tracking
-// landRouter.get("/audit/:id", officerAuth, getLandAuditLogs);
+export default landRouter;
