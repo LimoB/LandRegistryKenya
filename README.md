@@ -1,102 +1,122 @@
-📜 LandRegistryKenya
-A professional, blockchain-based land registry system designed to digitize land ownership, verification, and transfer processes in Kenya. By leveraging Ethereum and IPFS, the system ensures a transparent, tamper-proof record while utilizing PostgreSQL for scalable off-chain business logic.
+# LandRegistryKenya
 
-🚀 Key Features
-🏘️ Land Management
-Digital Registration: Register parcels with title deed uploads directly to IPFS.
+A blockchain-based land registry system designed to digitize land ownership, verification, and transfer processes in Kenya. The platform leverages Ethereum and IPFS to provide a transparent and tamper-proof system, while PostgreSQL handles scalable off-chain business logic.
 
-Verification: Government officers can verify and validate ownership within the dashboard.
+---
 
-Secure Metadata: Comprehensive land details stored in PostgreSQL via Drizzle ORM.
+## Overview
 
+LandRegistryKenya introduces a hybrid architecture that combines blockchain immutability with efficient off-chain storage. It ensures secure land registration, verifiable ownership history, and streamlined transfer processes while maintaining performance and cost efficiency.
 
-⛓️ Blockchain Integration
-Immutable Minting: Land registration is executed as a transaction on the Ethereum network.
+---
 
-On-Chain History: Complete, verifiable ownership history preserved immutably.
+## Key Features
 
-Hybrid Architecture: Keeps heavy data off-chain (IPFS/PostgreSQL) to minimize gas costs while keeping the "Source of Truth" on-chain.
+### Land Management
 
-🔄 Event-Driven Synchronization
-Smart Listeners: Real-time listeners for LandRegistered and OwnershipTransferred events.
+* **Digital Registration**
+  Register land parcels with title deed documents stored on IPFS.
 
-Auto-Sync: Automatically updates the PostgreSQL database when blockchain events occur, ensuring consistency without manual intervention.
+* **Verification System**
+  Government land officers can verify and approve ownership records through an administrative dashboard.
 
+* **Secure Metadata Storage**
+  Land details are stored in PostgreSQL using Drizzle ORM for structured and scalable data management.
 
+---
 
+### Blockchain Integration
 
-This is a solid project! Based on the screenshot and the technical details you provided, I have redesigned your README to be more professional, visually structured, and "GitHub-ready." I added icons, formatted the tech stack for better readability, and cleaned up the architecture flow.
+* **Immutable Registration**
+  Each land registration is recorded as a transaction on the Ethereum blockchain.
 
-📜 LandRegistryKenya
-A professional, blockchain-based land registry system designed to digitize land ownership, verification, and transfer processes in Kenya. By leveraging Ethereum and IPFS, the system ensures a transparent, tamper-proof record while utilizing PostgreSQL for scalable off-chain business logic.
+* **Ownership History Tracking**
+  Complete ownership history is permanently stored and verifiable on-chain.
 
-🚀 Key Features
-🏘️ Land Management
-Digital Registration: Register parcels with title deed uploads directly to IPFS.
+* **Hybrid Data Architecture**
+  Heavy data such as documents and metadata are stored off-chain (IPFS and PostgreSQL), while hashes and ownership references are stored on-chain to reduce gas costs.
 
-Verification: Government officers can verify and validate ownership within the dashboard.
+---
 
-Secure Metadata: Comprehensive land details stored in PostgreSQL via Drizzle ORM.
+### Event-Driven Synchronization
 
-⛓️ Blockchain Integration
-Immutable Minting: Land registration is executed as a transaction on the Ethereum network.
+* **Smart Contract Event Listeners**
+  The backend listens for events such as `LandRegistered` and `OwnershipTransferred`.
 
-On-Chain History: Complete, verifiable ownership history preserved immutably.
+* **Automatic Data Synchronization**
+  PostgreSQL is automatically updated whenever blockchain events are triggered, ensuring consistency between systems.
 
-Hybrid Architecture: Keeps heavy data off-chain (IPFS/PostgreSQL) to minimize gas costs while keeping the "Source of Truth" on-chain.
+---
 
-🔄 Event-Driven Synchronization
-Smart Listeners: Real-time listeners for LandRegistered and OwnershipTransferred events.
+### Security and Authentication
 
-Auto-Sync: Automatically updates the PostgreSQL database when blockchain events occur, ensuring consistency without manual intervention.
+* **Role-Based Access Control (RBAC)**
+  Defined roles include:
 
-🔐 Security & Auth
-RBAC (Role-Based Access Control): Specific permissions for Citizen, Land_Officer, and Admin.
+  * Citizen
+  * Land Officer
+  * Admin
 
-M-Pesa Integration: Secure off-chain payment processing for land transfers and fees.
+* **Authentication**
+  JWT-based authentication with password hashing using Bcrypt.
 
-Identity: JWT-based authentication with Bcrypt hashing and mandatory email verification.
+* **Email Verification**
+  Mandatory email verification for account activation.
 
-🛠️ Tech Stack
-Layer   Technology
-Backend Node.js, Express.js, TypeScript
-Blockchain  Solidity (^0.8.20), Ganache, Ethers.js
-Database    PostgreSQL, Drizzle ORM
-Storage IPFS (Pinata / Local Gateway)
-Payments    M-Pesa Daraja API
-DevOps  Linux/Kali environment, Truffle
+* **Payment Integration**
+  M-Pesa integration via Daraja API for handling land-related transactions.
 
+---
 
-📂 Project Structure
-Plaintext
+## Technology Stack
+
+| Layer      | Technology                             |
+| ---------- | -------------------------------------- |
+| Backend    | Node.js, Express.js, TypeScript        |
+| Blockchain | Solidity (^0.8.20), Ganache, Ethers.js |
+| Database   | PostgreSQL, Drizzle ORM                |
+| Storage    | IPFS (Pinata or Local Gateway)         |
+| Payments   | M-Pesa Daraja API                      |
+| DevOps     | Linux Environment, Truffle             |
+
+---
+
+## Project Structure
+
+```
 LandRegistryKenya/
-├── Backend/                # Express.js & TypeScript Source
+├── Backend/                     # Express.js and TypeScript source code
 │   ├── src/
-│   │   ├── blockchain/     # Listeners, Providers, & Land Logic
-│   │   ├── auth/           # JWT & Authentication Logic
-│   │   ├── lands/          # Land Management Routes
-│   │   ├── drizzle/        # Schema & Database Migrations
-│   │   └── middleware/     # RBAC & Security
-├── contracts/              # Solidity Smart Contracts
-├── migrations/             # Truffle Deployment Scripts
-└── .env                    # Configuration (Example below)
+│   │   ├── blockchain/         # Blockchain providers, listeners, and logic
+│   │   ├── auth/               # Authentication and authorization
+│   │   ├── lands/              # Land management routes and services
+│   │   ├── drizzle/            # Database schema and migrations
+│   │   └── middleware/         # RBAC and security middleware
+│
+├── contracts/                  # Solidity smart contracts
+├── migrations/                 # Truffle deployment scripts
+└── .env                        # Environment configuration
+```
 
+---
 
+## Installation and Setup
 
+### 1. Clone the Repository
 
-⚙️ Installation & Setup
-1. Clone & Install
-Bash
+```
 git clone https://github.com/LimoB/LandRegistryKenya.git
 cd LandRegistryKenya/Backend
 npm install
+```
 
+---
 
+### 2. Configure Environment Variables
 
-2. Configure Environment
-Create a .env file in the Backend directory:
+Create a `.env` file in the `Backend` directory:
 
-Code snippet
+```
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/landdb
 PORT=4000
@@ -110,37 +130,65 @@ OFFICER_PRIVATE_KEY=your_private_key
 EMAIL_SENDER=your_email@gmail.com
 EMAIL_PASSWORD=your_app_password
 CLIENT_URL=http://localhost:5173
-3. Deploy & Run
-Fire up Ganache.
+```
 
-Deploy the contract:
+---
 
-Bash
+### 3. Deploy and Run the Application
+
+Start Ganache, then deploy the smart contracts:
+
+```
 truffle migrate --network ganache
-Start the development server:
+```
 
-Bash
+Start the backend server:
+
+```
 npm run dev
+```
 
+---
 
+## System Architecture
 
-🏗️ System Architecture
-Code snippet
-graph LR
-    A[Frontend] --> B[Backend API]
-    B --> C[(PostgreSQL)]
-    B --> D[Ethereum Blockchain]
-    D -- Emits Events --> E[Event Listener]
-    E -- Updates --> C
-🛡️ Design Philosophy
-Scalability: Heavy metadata is stored in PostgreSQL; only hashes and ownership IDs touch the blockchain.
+```
+Frontend --> Backend API --> PostgreSQL
+                   |
+                   --> Ethereum Blockchain
+                           |
+                           --> Event Listener --> PostgreSQL
+```
 
-Fraud Prevention: By recording every transfer on an immutable ledger, unauthorized title changes become impossible.
+---
 
-User Experience: Integration with M-Pesa allows users to pay in local currency while the system handles the cryptographic proof of transfer.
+## Design Philosophy
 
-👨‍💻 Author
-Boaz Limo (LimoB) Software Engineer | Full-Stack Developer | Blockchain Enthusiast
+### Scalability
 
-📄 License
-Distributed under the MIT License. See LICENSE for more information.
+The system minimizes blockchain usage by storing only essential references on-chain while handling large datasets off-chain.
+
+### Data Integrity
+
+All ownership transactions are recorded on an immutable blockchain ledger, eliminating the risk of fraudulent modifications.
+
+### Cost Efficiency
+
+By offloading heavy data to IPFS and PostgreSQL, the system reduces gas fees associated with blockchain transactions.
+
+### Local Adaptation
+
+Integration with M-Pesa allows users to perform transactions using local currency, improving accessibility and usability.
+
+---
+
+## Author
+
+Boaz Limo
+Software Engineer | Full-Stack Developer | Blockchain Enthusiast
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
