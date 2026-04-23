@@ -21,31 +21,22 @@ export interface LandOwner {
 export interface Land {
   id: number;
   ownerId: number;
-
   lrNumber: string;
   county: string;
   constituency: string;
-
   sizeInAcres: number;
   landType: LandType;
-
   verificationStatus: VerificationStatus;
-
   isForSale: boolean;
-  priceInKsh?: number;
-
+  priceInKsh?: string; // Often returned as string from DB (Decimal)
   ipfsDocHash?: string;
   blockchainTxHash?: string;
   blockNumber?: number;
-
   onChainId?: number;
-
   verifiedBy?: number;
   verifiedAt?: string;
-
   createdAt: string;
   updatedAt?: string;
-
   owner?: LandOwner;
 }
 
@@ -69,9 +60,6 @@ interface MutationResponse<T = unknown> {
   data: T;
 }
 
-/* ============================================================
-   REGISTER PAYLOAD
-============================================================ */
 export interface RegisterLandPayload {
   lrNumber: string;
   county: string;
@@ -79,11 +67,9 @@ export interface RegisterLandPayload {
   sizeInAcres: number;
   landType: LandType;
   document: File;
+  priceInKsh?: number;
 }
 
-/* ============================================================
-   LIST FOR SALE PAYLOAD
-============================================================ */
 export interface ListForSalePayload {
   id: number;
   priceInKsh: number;
@@ -95,9 +81,7 @@ export interface ListForSalePayload {
 export const landApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
-    /* ============================================================
-       GET ALL LANDS
-    ============================================================ */
+    /* --- GET ALL LANDS --- */
     getLands: builder.query<Land[], void>({
       query: () => "/lands",
       transformResponse: (res: LandsResponse) => res.data,
@@ -110,113 +94,102 @@ export const landApi = baseApi.injectEndpoints({
           : [{ type: "Land", id: "LIST" }],
     }),
 
-/* ============================================================
-   GET MARKETPLACE LANDS
-============================================================ */
-getMarketplaceLands: builder.query<Land[], void>({
-  query: () => "/lands/marketplace",
+    /* --- GET MARKETPLACE LANDS --- */
+    getMarketplaceLands: builder.query<Land[], void>({
+      query: () => "/lands/marketplace",
+      transformResponse: (res: LandsResponse) => res.data,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((l) => ({ type: "Land" as const, id: l.id })),
+              { type: "Land", id: "MARKETPLACE" }
+            ]
+          : [{ type: "Land", id: "MARKETPLACE" }],
+    }),
 
-  transformResponse: (res: LandsResponse) => res.data,
+    /* --- GET MY LANDS (NEW) --- */
+    getMyLands: builder.query<Land[], void>({
+      query: () => "/lands/my-lands",
+      transformResponse: (res: LandsResponse) => res.data,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((l) => ({ type: "Land" as const, id: l.id })),
+              { type: "Land", id: "MY_LIST" }
+            ]
+          : [{ type: "Land", id: "MY_LIST" }],
+    }),
 
-  providesTags: (result) =>
-    result
-      ? [
-          ...result.map((l) => ({ type: "Land" as const, id: l.id })),
-          { type: "Land", id: "MARKETPLACE" }
-        ]
-      : [{ type: "Land", id: "MARKETPLACE" }],
-}),
-
-    /* ============================================================
-       GET LAND BY LR
-    ============================================================ */
+    /* --- GET LAND BY LR --- */
     getLandByLR: builder.query<Land, string>({
       query: (lrNumber) => `/lands/lr/${lrNumber}`,
       transformResponse: (res: SingleLandResponse) => res.data,
       providesTags: (_r, _e, lr) => [{ type: "Land", id: lr }],
     }),
 
-/* ============================================================
-   REGISTER LAND
-============================================================ */
-registerLand: builder.mutation<
-  MutationResponse<Land>,
-  RegisterLandPayload
->({
-  query: (data) => {
-    const formData = new FormData();
+    /* --- REGISTER LAND (FormData) --- */
+    registerLand: builder.mutation<MutationResponse<Land>, RegisterLandPayload>({
+      query: (data) => {
+        const formData = new FormData();
+        formData.append("lrNumber", data.lrNumber);
+        formData.append("county", data.county);
+        formData.append("constituency", data.constituency);
+        formData.append("sizeInAcres", String(data.sizeInAcres));
+        formData.append("landType", data.landType);
+        formData.append("document", data.document); // Matches upload.single("document")
+        if (data.priceInKsh) formData.append("priceInKsh", String(data.priceInKsh));
 
-    formData.append("lrNumber", data.lrNumber);
-    formData.append("county", data.county);
-    formData.append("constituency", data.constituency);
-    formData.append("sizeInAcres", String(data.sizeInAcres));
-    formData.append("landType", data.landType);
-    formData.append("document", data.document);
+        return {
+          url: "/lands/register",
+          method: "POST",
+          body: formData,
+        };
+      },
+      invalidatesTags: [{ type: "Land", id: "LIST" }, { type: "Land", id: "MY_LIST" }],
+    }),
 
-    return {
-      url: "/lands/register",
-      method: "POST",
-      body: formData,
-    };
-  },
-
-  invalidatesTags: [
-    { type: "Land", id: "LIST" },
-    { type: "Land", id: "MARKETPLACE" }
-  ],
-}),
-
-    /* ============================================================
-       VERIFY LAND
-    ============================================================ */
+    /* --- VERIFY LAND (PATCH) --- */
     verifyLand: builder.mutation<MutationResponse<Land>, number>({
       query: (id) => ({
         url: `/lands/verify/${id}`,
         method: "PATCH",
       }),
-
       invalidatesTags: (_r, _e, id) => [
         { type: "Land", id },
         { type: "Land", id: "LIST" },
+        { type: "Land", id: "MY_LIST" },
         { type: "Land", id: "MARKETPLACE" }
       ],
     }),
 
-/* ============================================================
-   LIST LAND FOR SALE
-============================================================ */
-listLandForSale: builder.mutation<
-  MutationResponse<Land>,
-  ListForSalePayload
->({
-  query: ({ id, priceInKsh }) => ({
-    url: `/lands/${id}/list-for-sale`,
-    method: "PATCH",
-    body: { priceInKsh },
-  }),
+    /* --- LIST LAND FOR SALE (PATCH) --- */
+    listLandForSale: builder.mutation<MutationResponse<Land>, ListForSalePayload>({
+      query: ({ id, priceInKsh }) => ({
+        url: `/lands/${id}/list-for-sale`,
+        method: "PATCH",
+        body: { priceInKsh },
+      }),
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: "Land", id },
+        { type: "Land", id: "LIST" },
+        { type: "Land", id: "MY_LIST" },
+        { type: "Land", id: "MARKETPLACE" }
+      ],
+    }),
 
-  invalidatesTags: (_r, _e, { id }) => [
-    { type: "Land", id },
-    { type: "Land", id: "LIST" },
-    { type: "Land", id: "MARKETPLACE" }
-  ],
-}),
-
-/* ============================================================
-   REMOVE FROM SALE
-============================================================ */
-removeFromSale: builder.mutation<MutationResponse<Land>, number>({
-  query: (id) => ({
-    url: `/lands/${id}/remove-from-sale`,
-    method: "PATCH",
-  }),
-
-  invalidatesTags: (_r, _e, id) => [
-    { type: "Land", id },
-    { type: "Land", id: "LIST" },
-    { type: "Land", id: "MARKETPLACE" }
-  ],
-}),
+    /* --- REMOVE FROM SALE (PATCH) --- */
+    removeFromSale: builder.mutation<MutationResponse<Land>, number>({
+      query: (id) => ({
+        url: `/lands/${id}/remove-from-sale`,
+        method: "PATCH",
+      }),
+      invalidatesTags: (_r, _e, id) => [
+        { type: "Land", id },
+        { type: "Land", id: "LIST" },
+        { type: "Land", id: "MY_LIST" },
+        { type: "Land", id: "MARKETPLACE" }
+      ],
+    }),
 
   }),
 });
@@ -227,6 +200,7 @@ removeFromSale: builder.mutation<MutationResponse<Land>, number>({
 export const {
   useGetLandsQuery,
   useGetMarketplaceLandsQuery,
+  useGetMyLandsQuery, // Added
   useGetLandByLRQuery,
   useRegisterLandMutation,
   useVerifyLandMutation,

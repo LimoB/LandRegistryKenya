@@ -29,14 +29,15 @@ import VerifyNotice from "../pages/VerifyNotice";
 import ForgotPassword from "../pages/ForgotPassword";
 import VerifyResetCode from "../pages/VerifyResetCode";
 
+// Shared Pages
+import Profile from "../pages/Profile"; // Real Profile Page added
+
 // Citizen Pages
 import CitizenDashboard from "../pages/citizen/CitizenDashboard";
 import MyLands from "../pages/citizen/MyLands";
 import RegisterLand from "../pages/citizen/RegisterLand";
 import TransferLand from "../pages/citizen/TransferLand";
 import MyRequests from "../pages/citizen/MyRequests";
-
-// 👇 ADD THIS (IMPORTANT)
 import LandDetails from "../pages/citizen/LandDetails";
 
 // Officer Pages
@@ -58,7 +59,6 @@ const AppRoutes: React.FC = () => {
 
   return (
     <Routes>
-
       {/* ================= PUBLIC ================= */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
@@ -92,35 +92,33 @@ const AppRoutes: React.FC = () => {
       />
 
       {/* ================= CITIZEN ================= */}
-<Route
-  path="/citizen"
-  element={
-    <ProtectedRoute>
-      <RoleBasedRoute allowedRoles={["citizen"]}>
-        <CitizenLayout />
-      </RoleBasedRoute>
-    </ProtectedRoute>
-  }
->
-  <Route index element={<Navigate to="dashboard" replace />} />
-  <Route path="dashboard" element={<CitizenDashboard />} />
-  <Route path="my-lands" element={<MyLands />} />
-  <Route path="register-land" element={<RegisterLand />} />
+      <Route
+        path="/citizen"
+        element={
+          <ProtectedRoute>
+            <RoleBasedRoute allowedRoles={["citizen"]}>
+              <CitizenLayout />
+            </RoleBasedRoute>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<CitizenDashboard />} />
+        <Route path="my-lands" element={<MyLands />} />
+        <Route path="register-land" element={<RegisterLand />} />
+        
+        {/* LR Number capture support */}
+        <Route path="lands/*" element={<LandDetails />} />
 
-  {/* FIXED LAND DETAILS ROUTE 
-      The '*' allows lrNumber to capture "LA/CAM/229" 
-      instead of breaking at the first slash.
-  */}
-  <Route path="lands/*" element={<LandDetails />} />
+        <Route path="transfer" element={<TransferLand />} />
+        <Route path="transfer/:id" element={<TransferLand />} />
+        <Route path="my-requests" element={<MyRequests />} />
+        <Route path="profile" element={<Profile />} /> {/*Swapped placeholder for real page */}
 
-  <Route path="transfer" element={<TransferLand />} />
-  <Route path="transfer/:id" element={<TransferLand />} />
-  <Route path="my-requests" element={<MyRequests />} />
-
-  <Route path="payments" element={<ComingSoon title="Payments" />} />
-  <Route path="wallet" element={<ComingSoon title="Wallet" />} />
-  <Route path="profile" element={<ComingSoon title="Profile" />} />
-</Route>
+        {/* Remaining Coming Soon */}
+        <Route path="payments" element={<ComingSoon title="Payments" />} />
+        <Route path="wallet" element={<ComingSoon title="Wallet" />} />
+      </Route>
 
       {/* ================= OFFICER ================= */}
       <Route
@@ -138,6 +136,7 @@ const AppRoutes: React.FC = () => {
         <Route path="verify-lands" element={<VerifyLands />} />
         <Route path="transfers" element={<TransferApprovals />} />
         <Route path="search" element={<RegistrySearch />} />
+        <Route path="profile" element={<Profile />} /> {/*Added Profile */}
       </Route>
 
       {/* ================= ADMIN ================= */}
@@ -158,6 +157,7 @@ const AppRoutes: React.FC = () => {
         <Route path="lands" element={<LandsManagement />} />
         <Route path="transfers" element={<TransfersManagement />} />
         <Route path="audit-logs" element={<AuditLogs />} />
+        <Route path="profile" element={<Profile />} /> {/*Added Profile */}
       </Route>
 
       {/* ================= FALLBACK ================= */}
