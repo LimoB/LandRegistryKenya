@@ -8,12 +8,17 @@ import {
 } from "./user.service";
 
 /* ================================
-   GET USERS
+   GET ALL USERS (ADMIN)
 ================================ */
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await getUsersService();
-    res.status(200).json(data);
+    
+    return res.status(200).json({
+      success: true,
+      count: data.length,
+      data
+    });
   } catch (error) {
     next(error);
   }
@@ -21,16 +26,29 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 
 /* ================================
    GET USER BY ID
-================================ */
+=============================== */
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await getUserByIdService(Number(req.params.id));
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    const userId = Number(req.params.id);
+    
+    if (isNaN(userId)) {
+      const error: any = new Error("Invalid User ID format");
+      error.statusCode = 400;
+      throw error;
     }
 
-    res.status(200).json(user);
+    const user = await getUserByIdService(userId);
+
+    if (!user) {
+      const error: any = new Error("User not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: user
+    });
   } catch (error) {
     next(error);
   }
@@ -45,7 +63,9 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
     const role = req.user?.role;
 
     if (!adminId || role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
+      const error: any = new Error("Forbidden: Admin access required");
+      error.statusCode = 403;
+      throw error;
     }
 
     const updatedUser = await updateUserService(
@@ -54,7 +74,11 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
       req.body
     );
 
-    res.status(200).json(updatedUser);
+    return res.status(200).json({
+      success: true,
+      message: "User updated successfully by admin",
+      data: updatedUser
+    });
   } catch (error) {
     next(error);
   }
@@ -68,12 +92,18 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
     const userId = req.user?.userId;
 
     if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      const error: any = new Error("Unauthorized: No session found");
+      error.statusCode = 401;
+      throw error;
     }
 
     const updatedUser = await updateProfileService(userId, req.body);
 
-    res.status(200).json(updatedUser);
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      data: updatedUser
+    });
   } catch (error) {
     next(error);
   }
@@ -88,12 +118,17 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
     const role = req.user?.role;
 
     if (!adminId || role !== "admin") {
-      return res.status(403).json({ message: "Forbidden" });
+      const error: any = new Error("Forbidden: You do not have permission to delete users");
+      error.statusCode = 403;
+      throw error;
     }
 
     await deleteUserService(adminId, Number(req.params.id));
 
-    res.status(200).json({ message: "User deleted successfully" });
+    return res.status(200).json({ 
+      success: true,
+      message: "User deleted successfully" 
+    });
   } catch (error) {
     next(error);
   }

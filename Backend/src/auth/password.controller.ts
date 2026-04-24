@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import db from "../drizzle/db";
 import { users, verificationTokens } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
@@ -6,10 +6,8 @@ import bcrypt from "bcrypt";
 import { sendLandPortalEmail } from "../middleware/googleMailer";
 
 import {
-  getPasswordResetEmail,
   getPasswordResetSuccessEmail,
   getResendVerificationEmail,
-  getCitizenWelcomeEmail
 } from "../emails";
 
 /* ============================================================
@@ -22,13 +20,14 @@ const generateOTP = (): string => {
 /* ============================================================
    1. FORGOT PASSWORD (OTP VERSION)
 ============================================================ */
-export const forgotPasswordController = async (req: Request, res: Response): Promise<void> => {
+export const forgotPasswordController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     let { email } = req.body;
 
     if (!email) {
-      res.status(400).json({ error: "Email is required" });
-      return;
+      const error: any = new Error("Email is required");
+      error.statusCode = 400;
+      throw error;
     }
 
     email = email.toLowerCase().trim();
@@ -37,15 +36,16 @@ export const forgotPasswordController = async (req: Request, res: Response): Pro
       where: eq(users.email, email),
     });
 
-    // prevent email enumeration
+    // Prevent email enumeration (always return 200)
     if (!user) {
       res.status(200).json({
+        success: true,
         message: "If the email exists, a reset code has been sent."
       });
       return;
     }
 
-    // delete old OTPs
+    // Delete old OTPs
     await db.delete(verificationTokens).where(
       and(
         eq(verificationTokens.userId, user.id),
@@ -68,9 +68,7 @@ export const forgotPasswordController = async (req: Request, res: Response): Pro
       body: `
         <h2>Password Reset Request</h2>
         <p>Use the following 6-digit code to reset your password:</p>
-
         <h1 style="letter-spacing:8px; font-size:32px;">${token}</h1>
-
         <p>This code expires in 1 hour.</p>
         <p>If you did not request this, ignore this email.</p>
       `
@@ -85,24 +83,27 @@ export const forgotPasswordController = async (req: Request, res: Response): Pro
     );
 
     res.status(200).json({
+      success: true,
       message: "Reset code sent to your email"
     });
+    return;
 
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    next(error);
   }
 };
 
 /* ============================================================
    2. RESET PASSWORD (OTP VERIFY)
 ============================================================ */
-export const resetPasswordController = async (req: Request, res: Response): Promise<void> => {
+export const resetPasswordController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { token, newPassword } = req.body;
 
     if (!token || !newPassword) {
-      res.status(400).json({ error: "Code and new password are required" });
-      return;
+      const error: any = new Error("Code and new password are required");
+      error.statusCode = 400;
+      throw error;
     }
 
     const storedToken = await db.query.verificationTokens.findFirst({
@@ -113,13 +114,15 @@ export const resetPasswordController = async (req: Request, res: Response): Prom
     });
 
     if (!storedToken) {
-      res.status(400).json({ error: "Invalid code" });
-      return;
+      const error: any = new Error("Invalid reset code");
+      error.statusCode = 400;
+      throw error;
     }
 
     if (storedToken.expiresAt < new Date()) {
-      res.status(400).json({ error: "Code expired" });
-      return;
+      const error: any = new Error("Reset code has expired");
+      error.statusCode = 400;
+      throw error;
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -128,7 +131,7 @@ export const resetPasswordController = async (req: Request, res: Response): Prom
       .set({ password: hashedPassword })
       .where(eq(users.id, storedToken.userId));
 
-    // delete used OTP
+    // Delete used OTP
     await db.delete(verificationTokens)
       .where(eq(verificationTokens.id, storedToken.id));
 
@@ -138,7 +141,6 @@ export const resetPasswordController = async (req: Request, res: Response): Prom
 
     if (user) {
       const successEmail = getPasswordResetSuccessEmail(user.fullName);
-
       await sendLandPortalEmail(
         user.email,
         user.fullName,
@@ -149,24 +151,27 @@ export const resetPasswordController = async (req: Request, res: Response): Prom
     }
 
     res.status(200).json({
+      success: true,
       message: "Password updated successfully"
     });
+    return;
 
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    next(error);
   }
 };
 
 /* ============================================================
-   3. RESEND VERIFICATION EMAIL (UNCHANGED LOGIC)
+   3. RESEND VERIFICATION EMAIL
 ============================================================ */
-export const resendVerificationController = async (req: Request, res: Response): Promise<void> => {
+export const resendVerificationController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     let { email } = req.body;
 
     if (!email) {
-      res.status(400).json({ error: "Email is required" });
-      return;
+      const error: any = new Error("Email is required");
+      error.statusCode = 400;
+      throw error;
     }
 
     email = email.toLowerCase().trim();
@@ -176,15 +181,18 @@ export const resendVerificationController = async (req: Request, res: Response):
     });
 
     if (!user) {
-      res.status(404).json({ error: "User not found" });
-      return;
+      const error: any = new Error("User not found");
+      error.statusCode = 404;
+      throw error;
     }
 
     if (user.isVerified) {
-      res.status(400).json({ error: "Account already verified" });
-      return;
+      const error: any = new Error("Account is already verified");
+      error.statusCode = 400;
+      throw error;
     }
 
+    // Delete existing verification tokens first
     await db.delete(verificationTokens).where(
       and(
         eq(verificationTokens.userId, user.id),
@@ -192,7 +200,7 @@ export const resendVerificationController = async (req: Request, res: Response):
       )
     );
 
-    const token = Math.floor(100000 + Math.random() * 900000).toString();
+    const token = generateOTP();
 
     await db.insert(verificationTokens).values({
       userId: user.id,
@@ -205,15 +213,11 @@ export const resendVerificationController = async (req: Request, res: Response):
 
     const finalHtml = `
       ${emailContent.body}
-
       <div style="text-align:center;margin-top:20px;">
         <h2>Your Verification Code</h2>
         <h1 style="letter-spacing:6px;">${token}</h1>
       </div>
-
-      <p style="font-size:12px;color:gray;">
-        This code expires in 24 hours
-      </p>
+      <p style="font-size:12px;color:gray;">This code expires in 24 hours</p>
     `;
 
     await sendLandPortalEmail(
@@ -225,10 +229,12 @@ export const resendVerificationController = async (req: Request, res: Response):
     );
 
     res.status(200).json({
+      success: true,
       message: "Verification code sent successfully"
     });
+    return;
 
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    next(error);
   }
 };

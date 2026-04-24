@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { 
   getLandByLRService, 
   getMarketplaceLandsService, 
@@ -6,37 +6,71 @@ import {
 } from "../services/index";
 import { getUserId } from "../../utils/auth.util";
 
-export const getLandByLR = async (req: Request, res: Response) => {
+/**
+ * Fetch a specific land parcel by its LR Number
+ */
+export const getLandByLR = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const lrNumber = Array.isArray(req.params.lrNumber) ? req.params.lrNumber[0] : req.params.lrNumber;
-    if (!lrNumber) return res.status(400).json({ success: false, error: "LR number is required" });
+    const lrNumber = Array.isArray(req.params.lrNumber) 
+      ? req.params.lrNumber[0] 
+      : req.params.lrNumber;
+
+    if (!lrNumber) {
+      const error: any = new Error("LR number is required");
+      error.statusCode = 400;
+      throw error;
+    }
 
     const land = await getLandByLRService(lrNumber);
-    if (!land) return res.status(404).json({ success: false, error: "Land not found" });
+    
+    if (!land) {
+      const error: any = new Error("Land record not found");
+      error.statusCode = 404;
+      throw error;
+    }
 
-    res.status(200).json({ success: true, data: land });
+    return res.status(200).json({ success: true, data: land });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 };
 
-export const getMarketplaceLands = async (_req: Request, res: Response) => {
+/**
+ * Fetch all lands currently listed on the marketplace
+ */
+export const getMarketplaceLands = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await getMarketplaceLandsService();
-    res.status(200).json({ success: true, count: data.length, data });
+    return res.status(200).json({ 
+      success: true, 
+      count: data.length, 
+      data 
+    });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 };
 
-export const getMyLands = async (req: Request, res: Response) => {
+/**
+ * Fetch all lands owned by the currently authenticated user
+ */
+export const getMyLands = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUserId(req);
-    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+    
+    if (!userId) {
+      const error: any = new Error("Unauthorized: User ID not found in token");
+      error.statusCode = 401;
+      throw error;
+    }
 
     const data = await getMyLandsService(userId);
-    res.status(200).json({ success: true, count: data.length, data });
+    return res.status(200).json({ 
+      success: true, 
+      count: data.length, 
+      data 
+    });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    next(error);
   }
 };

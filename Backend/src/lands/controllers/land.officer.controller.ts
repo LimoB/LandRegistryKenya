@@ -1,32 +1,66 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { verifyLandService, getAllLandsService } from "../services/index";
 import { getUserId } from "../../utils/auth.util";
 
-export const verifyLand = async (req: Request, res: Response) => {
+/**
+ * Verifies land and mints on-chain
+ */
+export const verifyLand = async (req: Request, res: Response, next: NextFunction) => {
   const landId = Number(req.params.id);
+  
   try {
     const officerId = getUserId(req);
-    if (!officerId) return res.status(401).json({ success: false, error: "Unauthorized" });
-    if (isNaN(landId)) return res.status(400).json({ success: false, error: "Invalid Land ID" });
+    
+    // 1. Validation Checks
+    if (!officerId) {
+      const error: any = new Error("Unauthorized: Please log in again.");
+      error.statusCode = 401;
+      throw error;
+    }
+    
+    if (isNaN(landId)) {
+      const error: any = new Error("Invalid Land ID provided.");
+      error.statusCode = 400;
+      throw error;
+    }
 
+    // 2. Call Service (Blockchain + DB)
     const result = await verifyLandService(landId, officerId);
-    res.status(200).json({ success: true, ...result });
+
+    // 3. Return Success
+    return res.status(200).json(result);
+    
   } catch (error: any) {
-    const isBlockchainDataError = error.message.includes("ENS") || error.message.includes("address");
-    res.status(isBlockchainDataError ? 422 : 500).json({
-      success: false,
-      error: isBlockchainDataError 
-        ? `Blockchain Minting Failed: Owner's wallet is invalid or missing.`
-        : error.message || "Internal Server Error"
-    });
+    // Determine if it's a blockchain-specific data issue
+    const isBlockchainDataError = 
+      error.message.includes("ENS") || 
+      error.message.includes("address") || 
+      error.message.includes("wallet") ||
+      error.message.includes("mint failed");
+
+    if (isBlockchainDataError) {
+      error.statusCode = 422; // Unprocessable Entity
+      error.message = `Blockchain Minting Failed: Check owner's wallet address. Details: ${error.message}`;
+    }
+
+    // Pass the error to the globalErrorHandler middleware
+    next(error);
   }
 };
 
-export const getLands = async (_req: Request, res: Response) => {
+/**
+ * Retrieves all land records
+ */
+export const getLands = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await getAllLandsService();
-    res.status(200).json({ success: true, count: data.length, data });
+    return res.status(200).json({ 
+      success: true, 
+      count: data.length, 
+      data 
+    });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    // Pass the error to the globalErrorHandler middleware
+    next(error);
   }
 };

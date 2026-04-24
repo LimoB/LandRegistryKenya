@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import {
   createMpesaPaymentService,
   confirmStripePaymentService,
@@ -8,22 +8,16 @@ import {
 } from "./payment.service";
 
 /* ============================================================
-   TYPES (NO ANY)
-============================================================ */
-type ControllerError = {
-  message?: string;
-};
-
-/* ============================================================
    M-PESA PAYMENT
 ============================================================ */
-export const recordMpesaPayment = async (req: Request, res: Response) => {
+export const recordMpesaPayment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { transferId, amount, mpesaCode } = req.body;
 
     if (!transferId || !amount || !mpesaCode) {
-      res.status(400).json({ error: "Missing fields" });
-      return;
+      const error: any = new Error("Missing required fields: transferId, amount, or mpesaCode");
+      error.statusCode = 400;
+      throw error;
     }
 
     const payment = await createMpesaPaymentService(
@@ -32,27 +26,27 @@ export const recordMpesaPayment = async (req: Request, res: Response) => {
       mpesaCode
     );
 
-    res.status(201).json({
-      message: "M-Pesa payment recorded",
-      payment,
+    return res.status(201).json({
+      success: true,
+      message: "M-Pesa payment recorded successfully",
+      data: payment,
     });
-  } catch (error: unknown) {
-    const err = error as ControllerError;
-    res.status(400).json({ error: err.message ?? "Payment failed" });
+  } catch (error) {
+    next(error);
   }
 };
 
 /* ============================================================
    STRIPE CONFIRM (MANUAL / BACKUP ONLY)
-   ⚠️ REAL CONFIRMATION SHOULD BE WEBHOOK
 ============================================================ */
-export const confirmStripePayment = async (req: Request, res: Response) => {
+export const confirmStripePayment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { sessionId, paymentIntentId } = req.body;
 
     if (!sessionId || !paymentIntentId) {
-      res.status(400).json({ error: "Missing sessionId or paymentIntentId" });
-      return;
+      const error: any = new Error("Missing sessionId or paymentIntentId");
+      error.statusCode = 400;
+      throw error;
     }
 
     const payment = await confirmStripePaymentService(
@@ -60,78 +54,83 @@ export const confirmStripePayment = async (req: Request, res: Response) => {
       paymentIntentId
     );
 
-    res.status(200).json({
+    return res.status(200).json({
+      success: true,
       message: "Stripe payment confirmed",
-      payment,
+      data: payment,
     });
-  } catch (error: unknown) {
-    const err = error as ControllerError;
-    res.status(400).json({ error: err.message ?? "Confirmation failed" });
+  } catch (error) {
+    next(error);
   }
 };
 
 /* ============================================================
    GET PAYMENT BY TRANSFER
 ============================================================ */
-export const getPaymentByTransfer = async (req: Request, res: Response) => {
+export const getPaymentByTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const transferId = Number(req.params.transferId);
 
     if (isNaN(transferId)) {
-      res.status(400).json({ error: "Invalid transfer ID" });
-      return;
+      const error: any = new Error("Invalid transfer ID format");
+      error.statusCode = 400;
+      throw error;
     }
 
     const payment = await getPaymentByTransferService(transferId);
 
     if (!payment) {
-      res.status(404).json({ error: "Payment not found" });
-      return;
+      const error: any = new Error("Payment record not found for this transfer");
+      error.statusCode = 404;
+      throw error;
     }
 
-    res.status(200).json(payment);
-  } catch (error: unknown) {
-    const err = error as ControllerError;
-    res.status(500).json({ error: err.message ?? "Server error" });
+    return res.status(200).json({
+      success: true,
+      data: payment
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
 /* ============================================================
    GET ALL PAYMENTS (ADMIN)
 ============================================================ */
-export const getPayments = async (_req: Request, res: Response) => {
+export const getPayments = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const payments = await getAllPaymentsService();
 
-    res.status(200).json({
+    return res.status(200).json({
+      success: true,
       count: payments.length,
       data: payments,
     });
-  } catch (error: unknown) {
-    const err = error as ControllerError;
-    res.status(500).json({ error: err.message ?? "Failed to fetch payments" });
+  } catch (error) {
+    next(error);
   }
 };
 
 /* ============================================================
    STRIPE CHECKOUT SESSION
 ============================================================ */
-export const createCheckoutSession = async (req: Request, res: Response) => {
+export const createCheckoutSession = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { transferId } = req.body;
 
     if (!transferId) {
-      res.status(400).json({ error: "transferId is required" });
-      return;
+      const error: any = new Error("transferId is required to initiate checkout");
+      error.statusCode = 400;
+      throw error;
     }
 
     const result = await createStripeCheckoutService(Number(transferId));
 
-    res.status(200).json(result);
-  } catch (error: unknown) {
-    const err = error as ControllerError;
-    res.status(400).json({
-      error: err.message ?? "Checkout failed",
+    return res.status(200).json({
+      success: true,
+      data: result
     });
+  } catch (error) {
+    next(error);
   }
 };

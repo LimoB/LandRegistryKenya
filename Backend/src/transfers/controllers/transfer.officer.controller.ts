@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import {
   approveTransferService,
   rejectTransferService,
@@ -7,52 +7,104 @@ import {
 } from "../services/index";
 import { getUserId } from "../../utils/auth.util";
 
-export const approveTransfer = async (req: Request, res: Response) => {
+/**
+ * Step 1: Officer approves the initial transfer request
+ */
+export const approveTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const officerId = getUserId(req);
-    if (!officerId) return res.status(401).json({ error: "Unauthorized" });
+    if (!officerId) {
+      const error: any = new Error("Unauthorized: Officer ID required");
+      error.statusCode = 401;
+      throw error;
+    }
 
     const result = await approveTransferService(Number(req.params.id), officerId);
-    return res.status(200).json(result);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Transfer approved and moved to pending finalization",
+      data: result
+    });
   } catch (error: any) {
-    return res.status(400).json({ error: error.message || "Failed to approve" });
+    next(error);
   }
 };
 
-export const rejectTransfer = async (req: Request, res: Response) => {
+/**
+ * Officer rejects a transfer request (e.g., due to document issues)
+ */
+export const rejectTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const officerId = getUserId(req);
-    if (!officerId) return res.status(401).json({ error: "Unauthorized" });
-
     const { reason } = req.body;
-    if (!reason) return res.status(400).json({ error: "Reason required" });
+
+    if (!officerId) {
+      const error: any = new Error("Unauthorized");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    if (!reason) {
+      const error: any = new Error("A reason for rejection must be provided.");
+      error.statusCode = 400;
+      throw error;
+    }
 
     const result = await rejectTransferService(Number(req.params.id), officerId, reason);
-    return res.status(200).json(result);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Transfer request rejected",
+      data: result
+    });
   } catch (error: any) {
-    return res.status(400).json({ error: error.message || "Failed to reject" });
+    next(error);
   }
 };
 
-export const finalizeTransfer = async (req: Request, res: Response) => {
+/**
+ * Step 2: Finalize the transfer (The Blockchain Step)
+ * This triggers the actual ownership change on the smart contract.
+ */
+export const finalizeTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const officerId = getUserId(req);
-    if (!officerId) return res.status(401).json({ error: "Unauthorized" });
+    if (!officerId) {
+      const error: any = new Error("Unauthorized");
+      error.statusCode = 401;
+      throw error;
+    }
 
     const result = await finalizeTransferService(Number(req.params.id), officerId);
-    return res.status(200).json(result);
+    
+    return res.status(200).json({
+      success: true,
+      message: "Transfer finalized successfully on the blockchain",
+      data: result
+    });
   } catch (error: any) {
-    const message = error.message || "Failed to finalize";
-    const statusCode = message.includes("Blockchain") ? 500 : 400;
-    return res.status(statusCode).json({ error: message });
+    // If it's a blockchain error, we flag it as 500 or 422 for the handler
+    if (error.message.includes("Blockchain") || error.message.includes("contract")) {
+      error.statusCode = 500;
+    }
+    next(error);
   }
 };
 
-export const getPending = async (_req: Request, res: Response) => {
+/**
+ * Fetch all transfers currently awaiting officer action
+ */
+export const getPending = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const data = await getPendingTransfersService();
-    return res.status(200).json(data);
-  } catch {
-    return res.status(500).json({ error: "Failed to fetch pending transfers" });
+    
+    return res.status(200).json({
+      success: true,
+      count: data.length,
+      data: data
+    });
+  } catch (error: any) {
+    next(error);
   }
 };

@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import {
   getAllAuditLogsService,
   getFilteredAuditLogsService,
@@ -6,30 +6,28 @@ import {
   getUserAuditLogsService
 } from "./audit.service";
 
-/* ================================
-   GET ALL LOGS (ADMIN)
-================================ */
-export const getAuditLogs = async (_req: Request, res: Response) => {
+/* ============================================================
+   GET ALL LOGS (ADMIN ONLY)
+============================================================ */
+export const getAuditLogs = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const logs = await getAllAuditLogsService();
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       count: logs.length,
       data: logs
     });
+    return;
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch audit logs"
-    });
+    next(error);
   }
 };
 
-/* ================================
-   FILTERED LOGS
-================================ */
-export const getFilteredAuditLogs = async (req: Request, res: Response) => {
+/* ============================================================
+   FILTERED LOGS (BY DATE, ACTION, OR ENTITY)
+============================================================ */
+export const getFilteredAuditLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const {
       landId,
@@ -47,73 +45,65 @@ export const getFilteredAuditLogs = async (req: Request, res: Response) => {
       toDate: toDate ? new Date(String(toDate)) : undefined
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       count: logs.length,
       data: logs
     });
+    return;
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to filter audit logs"
-    });
+    next(error);
   }
 };
 
-/* ================================
-   GET BY LAND
-================================ */
-export const getAuditLogsByLand = async (req: Request, res: Response) => {
+/* ============================================================
+   GET LOGS FOR A SPECIFIC LAND PARCEL
+============================================================ */
+export const getAuditLogsByLand = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const landId = Number(req.params.landId);
 
     if (isNaN(landId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid landId"
-      });
+      const error: any = new Error("Invalid Land ID provided");
+      error.statusCode = 400;
+      throw error;
     }
 
     const logs = await getLandAuditLogsService(landId);
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       count: logs.length,
       data: logs
     });
+    return;
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch land audit logs"
-    });
+    next(error);
   }
 };
 
-/* ================================
-   GET BY USER
-================================ */
-export const getAuditLogsByUser = async (req: Request, res: Response) => {
+/* ============================================================
+   GET LOGS FOR A SPECIFIC USER ACTION HISTORY
+============================================================ */
+export const getAuditLogsByUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const userId = Number(req.params.userId);
 
     if (isNaN(userId)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid userId"
-      });
+      const error: any = new Error("Invalid User ID provided");
+      error.statusCode = 400;
+      throw error;
     }
 
     const logs = await getUserAuditLogsService(userId);
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       count: logs.length,
       data: logs
     });
+    return;
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      error: "Failed to fetch user audit logs"
-    });
+    next(error);
   }
 };

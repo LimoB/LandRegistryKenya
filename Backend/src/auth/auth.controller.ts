@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import { registerService, loginService } from "./auth.service";
 import { sendLandPortalEmail } from "../middleware/googleMailer";
 import {
@@ -7,35 +7,36 @@ import {
   getAdminWelcomeEmail
 } from "../emails";
 import db from "../drizzle/db";
-import { verificationTokens, users } from "../drizzle/schema";
+import { verificationTokens } from "../drizzle/schema";
 import crypto from "crypto";
-import { eq } from "drizzle-orm";
 
 const allowedRoles = ["admin", "land_officer", "citizen"] as const;
 
 /* ============================================================
-   REGISTER CONTROLLER (TOKEN + LINK VERIFICATION)
+   REGISTER CONTROLLER
 ============================================================ */
-export const registerController = async (req: Request, res: Response): Promise<void> => {
+export const registerController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     let { fullName, email, idNumber, walletAddress, password, role } = req.body;
 
-    // Normalize email (IMPORTANT)
+    // Normalize email
     email = email?.toLowerCase().trim();
 
     // 1. Validate required fields
     if (!fullName || !email || !idNumber || !walletAddress || !password || !role) {
-      res.status(400).json({ error: "Missing required fields" });
-      return;
+      const error: any = new Error("Missing required registration fields");
+      error.statusCode = 400;
+      throw error;
     }
 
     // 2. Validate role
     if (!allowedRoles.includes(role)) {
-      res.status(400).json({ error: "Invalid role" });
-      return;
+      const error: any = new Error("Invalid role selection");
+      error.statusCode = 400;
+      throw error;
     }
 
-    // 3. Register user
+    // 3. Register user via service
     const user = await registerService({
       fullName,
       email,
@@ -45,9 +46,7 @@ export const registerController = async (req: Request, res: Response): Promise<v
       role,
     });
 
-    // ============================================================
-    // 4. TOKEN GENERATION (PRIMARY METHOD)
-    // ============================================================
+    // 4. TOKEN GENERATION
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -58,17 +57,10 @@ export const registerController = async (req: Request, res: Response): Promise<v
       expiresAt,
     });
 
-    // ============================================================
-    // 5. OPTIONAL LINK (FRONTEND SUPPORT)
-    // ============================================================
-    const verificationLink =
-      `${process.env.CLIENT_URL}/verify-email?token=${token}`;
+    const verificationLink = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
 
-    // ============================================================
-    // 6. EMAIL TEMPLATE SELECTION
-    // ============================================================
+    // 5. EMAIL TEMPLATE SELECTION
     let emailTemplate;
-
     if (role === "citizen") {
       emailTemplate = getCitizenWelcomeEmail(fullName, walletAddress);
     } else if (role === "land_officer") {
@@ -77,128 +69,87 @@ export const registerController = async (req: Request, res: Response): Promise<v
       emailTemplate = getAdminWelcomeEmail(fullName);
     }
 
-    // ============================================================
-    // 7. EMAIL CONTENT (TOKEN + LINK BOTH INCLUDED)
-    // ============================================================
+    // 6. EMAIL SENDING
     const finalHtml = `
       ${emailTemplate.body}
-
       <hr style="margin:20px 0;" />
-
       <p><b>Your Verification Token:</b></p>
-      <code style="font-size:16px; background:#f4f4f4; padding:10px;">
-        ${token}
-      </code>
-
-      <p style="margin-top:15px;">
-        You can either:
-      </p>
-
-      <ul>
-        <li>Click the button below (web users)</li>
-        <li>Or copy-paste the token into the app (mobile/API users)</li>
-      </ul>
-
+      <code style="font-size:16px; background:#f4f4f4; padding:10px;">${token}</code>
+      <p style="margin-top:15px;">Verify your account by clicking below or using the token in-app:</p>
       <div style="text-align:center; margin-top:20px;">
-        <a href="${verificationLink}"
-           style="background:#1a2a6c;color:#fff;padding:12px 20px;
-                  text-decoration:none;border-radius:6px;">
+        <a href="${verificationLink}" style="background:#1a2a6c;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;">
           Verify Account
         </a>
       </div>
     `;
 
-    await sendLandPortalEmail(
-      email,
-      fullName,
-      emailTemplate.subject,
-      finalHtml,
-      role as any
-    );
+    await sendLandPortalEmail(email, fullName, emailTemplate.subject, finalHtml, role as any);
 
+    // FIXED: Call res without returning the result of res.json()
     res.status(201).json({
-      message: "User registered successfully. Verify your account using email token or link.",
-      user: {
+      success: true,
+      message: "User registered successfully. Please check your email for the verification token.",
+      data: {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
-        walletAddress: user.walletAddress,
         role: user.role
       }
     });
+    return;
 
   } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+    next(error);
   }
 };
 
-/* ================================
-   LOGIN CONTROLLER (IMPROVED)
-================================ */
-export const loginController = async (req: Request, res: Response): Promise<void> => {
+/* ============================================================
+   LOGIN CONTROLLER
+============================================================ */
+export const loginController = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     let { email, password } = req.body;
 
-    // ============================================================
-    // 1. VALIDATION
-    // ============================================================
     if (!email || !password) {
-      res.status(400).json({
-        error: "Email and password are required"
-      });
-      return;
+      const error: any = new Error("Email and password are required");
+      error.statusCode = 400;
+      throw error;
     }
 
-    // Normalize email (IMPORTANT)
     email = email.toLowerCase().trim();
 
-    // ============================================================
-    // 2. AUTHENTICATION
-    // ============================================================
+    // 1. Authenticate
     const result = await loginService(email, password);
-
     const user = result.user;
 
-    // ============================================================
-    // 3. EMAIL VERIFICATION CHECK (BLOCKCHAIN SAFETY)
-    // ============================================================
+    // 2. Account Verification Check
     if (!user.isVerified) {
-      res.status(403).json({
-        error: "Account not verified. Please verify your email using the token sent to your inbox.",
-        code: "EMAIL_NOT_VERIFIED"
-      });
-      return;
+      const error: any = new Error("Account not verified. Check your email for a verification token.");
+      error.statusCode = 403;
+      error.code = "EMAIL_NOT_VERIFIED"; 
+      throw error;
     }
 
-    // ============================================================
-    // 4. SUCCESS RESPONSE
-    // ============================================================
+    // FIXED: Call res without returning the result of res.json()
     res.status(200).json({
+      success: true,
       message: "Login successful",
       token: result.token,
-      user: {
+      data: {
         id: user.id,
         fullName: user.fullName,
         email: user.email,
         role: user.role,
-        walletAddress: user.walletAddress,
-        isVerified: user.isVerified
+        walletAddress: user.walletAddress
       }
     });
+    return;
 
-  } catch (error) {
-    const message = (error as Error).message;
-
-    // Better error classification
-    if (message.includes("Invalid")) {
-      res.status(401).json({
-        error: "Invalid email or password"
-      });
-      return;
+  } catch (error: any) {
+    if (error.message.includes("Invalid")) {
+      error.statusCode = 401;
+      error.message = "Invalid email or password";
     }
-
-    res.status(500).json({
-      error: "Login failed. Please try again later."
-    });
+    next(error);
   }
 };

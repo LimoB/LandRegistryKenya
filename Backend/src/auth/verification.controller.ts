@@ -1,19 +1,19 @@
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import db from "../drizzle/db";
 import { users, verificationTokens } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 
-/* ============================================================
-   VERIFY EMAIL CONTROLLER (OTP + TOKEN SAFE)
-============================================================ */
+/**
+ * Verifies email using a token (from URL query or body)
+ * Marks user as verified and cleans up the used token.
+ */
 export const verifyEmailController = async (
   req: Request,
-  res: Response
+  res: Response,
+  next: NextFunction
 ): Promise<void> => {
   try {
-    // ============================================================
-    // 1. READ TOKEN (QUERY OR BODY SUPPORT)
-    // ============================================================
+    // 1. Read token (Support both URL Query and Request Body)
     let { token } = req.query;
 
     if (!token) {
@@ -21,80 +21,69 @@ export const verifyEmailController = async (
     }
 
     if (!token) {
-      res.status(400).json({ error: "Verification code is required" });
-      return;
+      const error: any = new Error("Verification code is required");
+      error.statusCode = 400;
+      throw error;
     }
 
-    // normalize token
+    // Normalize token (handle arrays or whitespace)
     if (Array.isArray(token)) {
       token = token[0];
     }
+    const normalizedToken = String(token).trim();
 
-    token = String(token).trim();
-
-    // ============================================================
-    // 2. FIND VERIFICATION TOKEN
-    // ============================================================
+    // 2. Find verification token in DB
     const storedToken = await db.query.verificationTokens.findFirst({
       where: and(
-        eq(verificationTokens.token, token),
+        eq(verificationTokens.token, normalizedToken),
         eq(verificationTokens.type, "email_verification")
       ),
     });
 
     if (!storedToken) {
-      res.status(400).json({
-        error: "Invalid or expired verification code"
-      });
-      return;
+      const error: any = new Error("Invalid or expired verification code");
+      error.statusCode = 400;
+      throw error;
     }
 
-    // ============================================================
-    // 3. CHECK EXPIRY
-    // ============================================================
+    // 3. Check Expiry
     if (storedToken.expiresAt < new Date()) {
-      // cleanup expired token
+      // Cleanup expired token automatically
       await db.delete(verificationTokens).where(
         eq(verificationTokens.id, storedToken.id)
       );
 
-      res.status(400).json({
-        error: "Verification code expired. Request a new one."
-      });
-      return;
+      const error: any = new Error("Verification code has expired. Please request a new one.");
+      error.statusCode = 400;
+      throw error;
     }
 
-    // ============================================================
-    // 4. GET USER
-    // ============================================================
+    // 4. Fetch associated user
     const user = await db.query.users.findFirst({
       where: eq(users.id, storedToken.userId),
     });
 
     if (!user) {
-      res.status(404).json({
-        error: "User not found for this verification code"
-      });
-      return;
+      const error: any = new Error("User record not found for this token");
+      error.statusCode = 404;
+      throw error;
     }
 
-    // ============================================================
-    // 5. ALREADY VERIFIED CHECK (IDEMPOTENT)
-    // ============================================================
+    // 5. Check if already verified (Idempotency)
     if (user.isVerified) {
+      // Cleanup token anyway since it's no longer needed
       await db.delete(verificationTokens).where(
         eq(verificationTokens.id, storedToken.id)
       );
 
       res.status(200).json({
-        message: "Account already verified. Please log in."
+        success: true,
+        message: "Account is already verified. Please proceed to log in."
       });
       return;
     }
 
-    // ============================================================
-    // 6. UPDATE USER STATUS
-    // ============================================================
+    // 6. Atomically update user status
     await db.update(users)
       .set({
         isVerified: true,
@@ -102,25 +91,20 @@ export const verifyEmailController = async (
       })
       .where(eq(users.id, user.id));
 
-    // ============================================================
-    // 7. DELETE TOKEN (ONE-TIME USE)
-    // ============================================================
+    // 7. Delete token (Single-use security)
     await db.delete(verificationTokens).where(
       eq(verificationTokens.id, storedToken.id)
     );
 
-    // ============================================================
-    // 8. RESPONSE
-    // ============================================================
+    // 8. Success Response
     res.status(200).json({
-      message: "Email verified successfully. Welcome to Land Registry."
+      success: true,
+      message: "Email verified successfully. Welcome to the Kenyan Land Registry Portal."
     });
+    return;
 
   } catch (error) {
-    console.error("[verifyEmailController]", error);
-
-    res.status(500).json({
-      error: "Internal server error during verification"
-    });
+    // Passes to your globalErrorHandler in app.ts
+    next(error);
   }
 };
