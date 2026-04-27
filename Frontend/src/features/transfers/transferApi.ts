@@ -36,7 +36,6 @@ export interface TransferRequest {
   };
 }
 
-// Helper interface for standard backend responses
 interface WrappedResponse<T> {
   success: boolean;
   message: string;
@@ -77,11 +76,29 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
+       GET ALL MY TRANSFERS (HISTORY)
+       Use this for the "My Transactions" dashboard
+    ============================================================ */
+    getMyTransfers: builder.query<TransferRequest[], void>({
+      query: () => "/transfers/my-requests",
+      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((t) => ({
+                type: "Transfer" as const,
+                id: t.id,
+              })),
+              { type: "Transfer", id: "LIST" },
+            ]
+          : [{ type: "Transfer", id: "LIST" }],
+    }),
+
+    /* ============================================================
        GET PENDING TRANSFERS (OFFICER)
     ============================================================ */
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
-      // FIXED: Extract the array from the data wrapper
       transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
       providesTags: (result) =>
         result
@@ -100,7 +117,6 @@ export const transferApi = baseApi.injectEndpoints({
     ============================================================ */
     getTransferById: builder.query<TransferRequest, number>({
       query: (id) => `/transfers/${id}`,
-      // FIXED: Extract single object from the data wrapper
       transformResponse: (response: WrappedResponse<TransferRequest>) => response.data,
       providesTags: (_result, _error, id) => [
         { type: "Transfer", id },
@@ -163,7 +179,6 @@ export const transferApi = baseApi.injectEndpoints({
     ============================================================ */
     getMySales: builder.query<TransferRequest[], void>({
       query: () => "/transfers/my-sales",
-      // FIXED: Extract the array from the data wrapper
       transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
       providesTags: (result) =>
         result
@@ -185,6 +200,7 @@ export const transferApi = baseApi.injectEndpoints({
 ================================ */
 export const {
   useCreateTransferMutation,
+  useGetMyTransfersQuery, // New hook to use in MyRequests.tsx
   useGetPendingTransfersQuery,
   useGetTransferByIdQuery,
   useApproveTransferMutation,

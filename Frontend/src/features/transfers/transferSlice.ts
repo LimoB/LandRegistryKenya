@@ -5,7 +5,11 @@ import type { TransferRequest } from "./transferApi";
    STATE INTERFACE
 ================================ */
 interface TransferState {
+  // Currently viewed transfer in the TransferStatus page or Modals
   selectedTransfer: TransferRequest | null;
+
+  // Track the history of requests for filtering or local state management
+  requests: TransferRequest[];
 
   // MODALS
   modals: {
@@ -15,7 +19,7 @@ interface TransferState {
     payment: boolean;
   };
 
-  // LOADING STATES
+  // LOADING STATES (For non-RTK Query local UI feedback)
   loading: {
     initiate: boolean;
     approve: boolean;
@@ -30,6 +34,7 @@ interface TransferState {
 ================================ */
 const initialState: TransferState = {
   selectedTransfer: null,
+  requests: [],
 
   modals: {
     initiate: false,
@@ -147,38 +152,29 @@ const transferSlice = createSlice({
 export const {
   setSelectedTransfer,
   clearSelectedTransfer,
-
   setModal,
   setLoading,
-
   openInitiateModal,
   closeInitiateModal,
-
   openApproveModal,
   closeApproveModal,
-
   openRejectModal,
   closeRejectModal,
-
   openPaymentModal,
   closePaymentModal,
-
   resetTransferState,
 } = transferSlice.actions;
 
 /* ================================
    SELECTORS
 ================================ */
-export const selectSelectedTransfer = (state: {
-  transfer: TransferState;
-}) => state.transfer.selectedTransfer;
+export const selectSelectedTransfer = (state: { transfer: TransferState }) => 
+  state.transfer.selectedTransfer;
 
-export const selectTransferModals = (state: {
-  transfer: TransferState;
-}) => state.transfer.modals;
+export const selectTransferModals = (state: { transfer: TransferState }) => 
+  state.transfer.modals;
 
-export const selectTransferLoading = (state: {
-  transfer: TransferState;
-}) => state.transfer.loading;
+export const selectTransferLoading = (state: { transfer: TransferState }) => 
+  state.transfer.loading;
 
 export default transferSlice.reducer;

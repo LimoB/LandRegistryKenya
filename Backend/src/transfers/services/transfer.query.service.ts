@@ -1,6 +1,27 @@
-import { eq, desc, and, or } from "drizzle-orm";
+import { eq, desc, and, or, ne } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { transferRequests } from "../../drizzle/schema";
+
+/**
+ * NEW: Fetches ALL transfers for a user (History + Active)
+ * This ensures "Completed", "Paid", and "Rejected" items still show up.
+ */
+export const getUserTransfersService = async (userId: number) => {
+  console.log(`[Service] Fetching all transaction history for User ID: ${userId}`);
+
+  return await db.query.transferRequests.findMany({
+    where: or(
+      eq(transferRequests.buyerId, userId),
+      eq(transferRequests.sellerId, userId)
+    ),
+    with: {
+      land: true,
+      buyer: true,
+      seller: true
+    },
+    orderBy: [desc(transferRequests.createdAt)]
+  });
+};
 
 /**
  * Lists pending transfers with Role-Based Filtering
@@ -12,7 +33,6 @@ export const getPendingTransfersService = async (userId: number, userRole: strin
   let finalCondition;
 
   if (userRole === "citizen") {
-    // 🔥 CITIZEN FILTER: Only show where they are the buyer OR the seller
     finalCondition = and(
       statusCondition,
       or(
@@ -21,7 +41,6 @@ export const getPendingTransfersService = async (userId: number, userRole: strin
       )
     );
   } else {
-    // OFFICER/ADMIN: Show everything that is pending
     finalCondition = statusCondition;
   }
 

@@ -5,6 +5,7 @@ import {
   getPending,
   rejectTransfer,
   getMySales,
+  getMyTransfers,
   finalizeTransfer,
   getTransferById
 } from "./controllers/index";
@@ -35,6 +36,16 @@ transferRouter.post(
 );
 
 /**
+ * View full transaction history (Purchases & Sales)
+ * MUST be defined before /:id to avoid "my-requests" being treated as an ID
+ */
+transferRouter.get(
+  "/my-requests",
+  citizenAuth,
+  getMyTransfers
+);
+
+/**
  * View seller's transfers (sales history)
  */
 transferRouter.get(
@@ -52,13 +63,12 @@ transferRouter.get(
  */
 transferRouter.get(
   "/pending",
-  anyRoleAuth, // Changed from officerAuth
+  anyRoleAuth,
   getPending
 );
 
 /**
  * Approve transfer (moves to payment_pending state)
- * Idempotent recommended (prevents double approval issues)
  */
 transferRouter.patch(
   "/approve/:id",
@@ -69,7 +79,6 @@ transferRouter.patch(
 
 /**
  * Reject transfer
- * Idempotent recommended (prevents double rejection logs)
  */
 transferRouter.patch(
   "/reject/:id",
@@ -80,7 +89,6 @@ transferRouter.patch(
 
 /**
  * Finalize transfer (after payment confirmed via webhook)
- * CRITICAL: must be idempotent (blockchain + DB safety)
  */
 transferRouter.patch(
   "/finalize/:id",
@@ -95,6 +103,7 @@ transferRouter.patch(
 
 /**
  * Get transfer by ID (buyer/seller/officer)
+ * THIS MUST REMAIN AT THE BOTTOM OF THE FILE
  */
 transferRouter.get(
   "/:id",

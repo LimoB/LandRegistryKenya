@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-// NOTE: If you have an endpoint like useGetMyTransfersQuery, use that instead of 'Pending'
-import { useGetPendingTransfersQuery, type TransferRequest } from "../../features/transfers/transferApi";
+import { useGetMyTransfersQuery, type TransferRequest } from "../../features/transfers/transferApi";
 import { useAppSelector } from "../../app/hooks";
 import {
   Activity,
@@ -36,27 +35,19 @@ const MyRequests: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
   const [filter, setFilter] = useState<TransferStatus | "all">("all");
 
-  // If your API allows, replace this with a query that fetches ALL history, 
-  // not just 'Pending', to ensure approved items remain visible.
-  const { data: response, isLoading, isError, refetch } = useGetPendingTransfersQuery();
+  const { data: response, isLoading, isError, refetch } = useGetMyTransfersQuery();
 
   /* ================= FILTER LOGIC ================= */
   const myRequests = useMemo(() => {
     if (!user || !response) return [];
     
-    const rawList = Array.isArray(response)
-      ? response
-      : (response && "data" in response
-          ? (response as { data: TransferRequest[] }).data
-          : []);
+    // Type-safe normalization: RTK Query transformResponse usually handles this, 
+    // but we add a fallback check here without using 'any'.
+    const rawList: TransferRequest[] = Array.isArray(response) ? response : [];
     
     return rawList.filter((t: TransferRequest) => {
-      // 1. Ensure it belongs to the user
       const isParticipant = String(t.buyerId) === String(user.id) || String(t.sellerId) === String(user.id);
-      
-      // 2. Apply status filter (if user selected one)
       const matchesFilter = filter === "all" || t.status === filter;
-      
       return isParticipant && matchesFilter;
     });
   }, [response, user, filter]);
@@ -68,7 +59,7 @@ const MyRequests: React.FC = () => {
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Transactions</h1>
           <p className="text-sm text-slate-500 font-medium mt-1">
-            Managing {myRequests.length} active land transfer {myRequests.length === 1 ? 'record' : 'records'}
+            Displaying {myRequests.length} transaction {myRequests.length === 1 ? 'record' : 'records'}
           </p>
         </div>
 
@@ -123,46 +114,37 @@ const RequestCard = ({
   onClick: () => void; 
 }) => {
   const isBuyer = String(request.buyerId) === String(currentUserId);
+  const navigate = useNavigate();
 
   const statusMap: Record<TransferStatus, StatusStyle> = {
     pending: {
       icon: <Clock size={14} />,
       label: "Verification",
-      color: "text-amber-600",
-      bg: "bg-amber-50",
-      border: "border-amber-100",
+      color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-100",
     },
     payment_pending: {
       icon: <CreditCard size={14} />,
       label: "Awaiting Payment",
-      color: "text-blue-600",
-      bg: "bg-blue-50",
-      border: "border-blue-100",
+      color: "text-blue-600", bg: "bg-blue-50", border: "border-blue-100",
     },
     paid: {
       icon: <Activity size={14} />,
       label: "Processing Title",
-      color: "text-indigo-600",
-      bg: "bg-indigo-50",
-      border: "border-indigo-100",
+      color: "text-indigo-600", bg: "bg-indigo-50", border: "border-indigo-100",
     },
     completed: {
       icon: <CheckCircle2 size={14} />,
       label: "Transfer Success",
-      color: "text-emerald-600",
-      bg: "bg-emerald-50",
-      border: "border-emerald-100",
+      color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-100",
     },
     rejected: {
       icon: <XCircle size={14} />,
       label: "Cancelled",
-      color: "text-red-600",
-      bg: "bg-red-50",
-      border: "border-red-100",
+      color: "text-red-600", bg: "bg-red-50", border: "border-red-100",
     },
   };
 
-  const style = statusMap[request.status as TransferStatus] || statusMap.pending;
+  const style = statusMap[request.status] || statusMap.pending;
 
   return (
     <div 
@@ -184,9 +166,7 @@ const RequestCard = ({
               LR: {request.land?.lrNumber || `#${request.landId}`}
             </p>
           </div>
-          <p className="text-lg font-black text-slate-900 leading-none">
-            Land Title Transfer
-          </p>
+          <p className="text-lg font-black text-slate-900 leading-none">Land Title Transfer</p>
           <p className="text-[10px] text-slate-400 font-bold mt-2 flex items-center gap-1">
             <Clock size={10} />
             {request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Date Unknown'}
@@ -201,11 +181,13 @@ const RequestCard = ({
         </div>
 
         {isBuyer && request.status === "payment_pending" && (
-          <div className="hidden md:block w-px h-8 bg-slate-100 mx-2" />
-        )}
-
-        {isBuyer && request.status === "payment_pending" && (
-          <button className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation(); 
+              navigate(`/citizen/transfer/status/${request.id}`);
+            }}
+            className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all active:scale-95"
+          >
             Complete Payment
           </button>
         )}
@@ -218,14 +200,14 @@ const RequestCard = ({
   );
 };
 
-/* ================= STATE HELPERS ================= */
+/* --- STATE HELPERS --- */
 const LoadingState = () => (
   <div className="py-32 text-center space-y-4">
     <div className="relative w-16 h-16 mx-auto">
       <div className="absolute inset-0 border-4 border-indigo-100 rounded-full"></div>
       <div className="absolute inset-0 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
     </div>
-    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Accessing Registry</p>
+    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Syncing History...</p>
   </div>
 );
 
@@ -252,10 +234,10 @@ const EmptyRequests = ({ isFiltered }: { isFiltered: boolean }) => (
     <p className="font-black text-slate-900 text-lg">
       {isFiltered ? "No matching records" : "No transactions yet"}
     </p>
-    <p className="text-sm max-w-xs text-center mt-1">
+    <p className="text-sm max-w-xs text-center mt-1 text-slate-500">
       {isFiltered 
-        ? "Try changing your status filter to see other records." 
-        : "Once you initiate a land transfer, it will appear here for tracking."}
+        ? "Try changing your status filter." 
+        : "Once you start a transfer, it will appear here."}
     </p>
   </div>
 );
