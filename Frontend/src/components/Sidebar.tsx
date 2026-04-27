@@ -25,8 +25,8 @@ import {
   Blocks,
   KeyRound,
   ChevronDown,
-  FileText, // Added for Digital Titles
-  CreditCard // Added for Payments
+  FileText,
+  CreditCard
 } from "lucide-react";
 
 interface SidebarProps {
@@ -75,14 +75,16 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         { name: "Verify Lands", path: "/officer/verify-lands", icon: FileSearch },
         { name: "Transfer Approvals", path: "/officer/transfers", icon: CheckSquare },
       ],
-      tools: [{ name: "Search Registry", path: "/officer/search", icon: Search }],
+      tools: [
+        { name: "Search Registry", path: "/officer/search", icon: Search }
+      ],
     },
 
     citizen: {
       overview: [{ name: "Dashboard", path: "/citizen/dashboard", icon: Home }],
       property: [
         { name: "My Lands", path: "/citizen/my-lands", icon: Database },
-        { name: "Digital Titles", path: "/citizen/titles", icon: FileText }, // Link to final certificates
+        { name: "Digital Titles", path: "/citizen/titles", icon: FileText },
         { name: "Marketplace", path: "/citizen/transfer", icon: Globe },
       ],
       activity: [
@@ -108,7 +110,10 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         {items.map((item) => {
           const Icon = item.icon;
           
-          // Logic to keep sidebar highlighed when viewing sub-routes like /status/123
+          // Improved active logic:
+          // 1. Check if name matches "My Requests" and we are on a status sub-route
+          // 2. Check if the path is an exact match for dashboard
+          // 3. Otherwise, check if the current pathname starts with the item path
           const isRequestActive = item.name === "My Requests" && location.pathname.includes("/transfer/status");
           const isDashboard = item.path.endsWith("/dashboard");
           const isActive = isDashboard 
