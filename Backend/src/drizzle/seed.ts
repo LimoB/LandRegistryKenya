@@ -15,11 +15,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 async function seed() {
-  console.log("Starting Kenyan Land Registry Clean & Seed...");
+  console.log("Starting Enhanced Kenyan Land Registry Seed...");
 
-  // 1. CLEAN UP (Delete existing data in order of constraints)
+  // 1. CLEAN UP (Maintain order for Foreign Key constraints)
   try {
-    console.log("Wiping database tables...");
+    console.log("Wiping existing data...");
     await db.delete(auditLogs);
     await db.delete(payments);
     await db.delete(transferRequests);
@@ -32,18 +32,13 @@ async function seed() {
     console.error("Error clearing database:", e);
   }
 
-  /* ================= PASSWORD HASH FUNCTION ================= */
-  const hash = async (password: string) => {
-    return await bcrypt.hash(password, 10);
-  };
+  const hash = async (password: string) => await bcrypt.hash(password, 10);
 
   try {
     /* ================= 2. USERS ================= */
-    console.log("Seeding 6 Users (1 Admin, 2 Officers, 3 Citizens)...");
-
+    console.log("Seeding Users (All Pre-Verified for Development)...");
     const insertedUsers = await db.insert(users).values([
       {
-        // INDEX 0
         fullName: "System Admin",
         email: "admin@registry.go.ke",
         idNumber: "11110000",
@@ -54,7 +49,6 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        // INDEX 1
         fullName: "Officer Sarah Wanjiku",
         email: "sarah.officer@registry.go.ke",
         idNumber: "22220001",
@@ -65,7 +59,6 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        // INDEX 2
         fullName: "Officer David Omolo",
         email: "david.officer@registry.go.ke",
         idNumber: "22220002",
@@ -76,7 +69,6 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        // INDEX 3
         fullName: "Citizen Limo",
         email: "citizenlim07@gmail.com",
         idNumber: "33330001",
@@ -87,7 +79,6 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        // INDEX 4
         fullName: "John Kamau",
         email: "john.citizen@gmail.com",
         idNumber: "33330002",
@@ -98,7 +89,6 @@ async function seed() {
         emailVerifiedAt: new Date()
       },
       {
-        // INDEX 5
         fullName: "Mary Atieno",
         email: "mary.citizen@gmail.com",
         idNumber: "33330003",
@@ -113,104 +103,122 @@ async function seed() {
     const [admin, officer1, officer2, citizen1, citizen2, citizen3] = insertedUsers;
 
     /* ================= 3. LANDS ================= */
-    console.log("Seeding Lands...");
-
+    console.log("Seeding Expanded Land Parcels...");
     const insertedLands = await db.insert(lands).values([
       {
         ownerId: citizen1.id,
-        lrNumber: "LAI/NYAHU/2026/001",
-        county: "Laikipia",
-        constituency: "Laikipia West",
-        sizeInAcres: "5.0000",
-        landType: "agricultural",
-        verificationStatus: "pending", // Set to pending to test your VerifyLands page
-        isForSale: true,
-        priceInKsh: "2500000.00"
-      },
-      {
-        ownerId: citizen2.id,
-        lrNumber: "NAI/KASA/2026/492",
-        county: "Nairobi",
-        constituency: "Kasarani",
-        sizeInAcres: "0.2500",
+        lrNumber: "KJI/CENT/2026/901", // Incremented to avoid conflicts
+        county: "Kiambu",
+        constituency: "Thika",
+        sizeInAcres: "2.5000",
         landType: "residential",
         verificationStatus: "pending",
         isForSale: false
       },
       {
+        ownerId: citizen2.id,
+        lrNumber: "NKR/MAI/2026/442",
+        county: "Nakuru",
+        constituency: "Naivasha",
+        sizeInAcres: "10.0000",
+        landType: "agricultural",
+        verificationStatus: "pending",
+        isForSale: false
+      },
+      {
         ownerId: citizen3.id,
-        lrNumber: "MSA/NYA/2026/112",
-        county: "Mombasa",
-        constituency: "Nyali",
-        sizeInAcres: "1.2000",
+        lrNumber: "KSM/CITY/2026/013",
+        county: "Kisumu",
+        constituency: "Kisumu Central",
+        sizeInAcres: "0.5000",
         landType: "commercial",
         verificationStatus: "verified",
         verifiedBy: officer1.id,
         verifiedAt: new Date(),
-        onChainId: 3,
-        blockchainTxHash: "0xinitial_mint_hash",
+        onChainId: 101,
         isForSale: true,
-        priceInKsh: "15000000.00"
+        priceInKsh: "8500000.00"
+      },
+      {
+        ownerId: citizen1.id,
+        lrNumber: "NRB/WEST/2026/779",
+        county: "Nairobi",
+        constituency: "Westlands",
+        sizeInAcres: "0.1250",
+        landType: "residential",
+        verificationStatus: "verified",
+        verifiedBy: officer2.id,
+        verifiedAt: new Date(),
+        onChainId: 102,
+        isForSale: true,
+        priceInKsh: "45000000.00"
       }
     ]).returning();
 
-    const [land1, land2, land3] = insertedLands;
+    const [land1, land2, land3, land4] = insertedLands;
 
-    /* ================= 4. OWNERSHIP HISTORY ================= */
-    console.log("Seeding Ownership History...");
-
-    await db.insert(landOwnershipHistory).values([
-      { 
-        landId: land1.id, 
-        fromOwnerId: citizen1.id, 
-        toOwnerId: citizen1.id, 
-        fromWallet: citizen1.walletAddress, 
-        toWallet: citizen1.walletAddress, 
-        blockchainTxHash: "0xhist1" 
-      },
-      { 
-        landId: land3.id, 
-        fromOwnerId: citizen3.id, 
-        toOwnerId: citizen3.id, 
-        fromWallet: citizen3.walletAddress, 
-        toWallet: citizen3.walletAddress, 
-        blockchainTxHash: "0xhist3" 
-      }
-    ]);
-
-    /* ================= 5. TRANSFER REQUESTS ================= */
+    /* ================= 4. TRANSFER REQUESTS ================= */
     console.log("Seeding Transfer Requests...");
-
-    await db.insert(transferRequests).values([
+    const insertedTransfers = await db.insert(transferRequests).values([
       {
         landId: land3.id,
         sellerId: citizen3.id,
         buyerId: citizen1.id,
         status: "pending",
-        blockchainStatus: "pending"
+        blockchainStatus: "pending",
+        createdAt: new Date()
+      },
+      {
+        landId: land4.id,
+        sellerId: citizen1.id,
+        buyerId: citizen2.id,
+        status: "approved",
+        blockchainStatus: "pending",
+        createdAt: new Date(Date.now() - 86400000)
+      }
+    ]).returning();
+
+    /* ================= 5. PAYMENTS ================= */
+    console.log("Seeding Payments...");
+    await db.insert(payments).values([
+      {
+        transferRequestId: insertedTransfers[1].id,
+        landId: land4.id,
+        amount: "45000000.00",
+        paymentMethod: "mpesa",
+        paymentStatus: "completed",
+        operationType: "land_purchase",
+        confirmedAt: new Date()
       }
     ]);
 
     /* ================= 6. AUDIT LOGS ================= */
-    console.log("Seeding Audit Logs...");
+    console.log("Finalizing Audit...");
     await db.insert(auditLogs).values([
       {
         performedBy: admin.id,
-        actionType: "DATABASE_SEED",
+        actionType: "SYSTEM_REBOOT",
         metadata: {
-          resource: "SYSTEM",
-          details: "Initial system seed completed successfully"
+          details: "Full database reset and expanded seed performed",
+          scope: "global"
         }
       }
     ]);
 
-    console.log("Seed Complete:");
-    console.log("- 6 Users created");
-    console.log("- 3 Land parcels created (2 Pending, 1 Verified)");
-    console.log("- Ownership History and Transfer Requests initialized");
-    
-    process.exit(0);
+    /* ================= 7. VERIFICATION TOKENS ================= */
+    // Adding dummy tokens to satisfy schema but they are already verified
+    await db.insert(verificationTokens).values([
+      {
+        userId: citizen1.id,
+        token: "1234567890", // Matches the 10 character limit in schema
+        type: "email_verification",
+        expiresAt: new Date(Date.now() + 3600000),
+        used: true
+      }
+    ]);
 
+    console.log("SEEDING COMPLETE");
+    process.exit(0);
   } catch (error) {
     console.error("Seeding failed:", error);
     process.exit(1);

@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import db from "../drizzle/db";
 import { users, auditLogs } from "../drizzle/schema";
 
@@ -35,12 +35,11 @@ export const getUserByIdService = async (userId: number) => {
     },
     with: {
       ownedLands: true,
+      verifiedLands: true,
       sentRequests: true,
       receivedRequests: true,
       logs: true,
       tokens: true,
-
-      // FIXED RELATIONS
       ownershipHistoryFrom: true,
       ownershipHistoryTo: true
     }
@@ -53,14 +52,17 @@ export const getUserByIdService = async (userId: number) => {
 export const updateUserService = async (
   adminId: number,
   userId: number,
-  updates: Partial<TUserInsert>
+  updates: Partial<TUserInsert> & { id?: any } // Allow 'id' for destructuring
 ) => {
-  const payload: Partial<TUserInsert> = { ...updates };
-
-  delete (payload as any).password;
-  delete (payload as any).id;
-  delete (payload as any).createdAt;
-  delete (payload as any).emailVerifiedAt;
+  // Destructure to safely remove fields
+  // 'id' is extracted here so it doesn't end up in 'payload'
+  const { 
+    password, 
+    id, 
+    createdAt, 
+    emailVerifiedAt, 
+    ...payload 
+  } = updates;
 
   const result = await db
     .update(users)
@@ -84,17 +86,21 @@ export const updateUserService = async (
 
 /* ================================
    UPDATE PROFILE (SELF)
-================================ */
+=============================== */
 export const updateProfileService = async (
   userId: number,
-  updates: Partial<TUserInsert>
+  updates: Partial<TUserInsert> & { id?: any } // Allow 'id' for destructuring
 ) => {
-  const payload: Partial<TUserInsert> = { ...updates };
-
-  delete (payload as any).role;
-  delete (payload as any).isVerified;
-  delete (payload as any).walletAddress;
-  delete (payload as any).emailVerifiedAt;
+  // Destructure to prevent privilege escalation
+  const { 
+    role, 
+    isVerified, 
+    walletAddress, 
+    emailVerifiedAt, 
+    password: _, 
+    id: __, 
+    ...payload 
+  } = updates;
 
   const result = await db
     .update(users)

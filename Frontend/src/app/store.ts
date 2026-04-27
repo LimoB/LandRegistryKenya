@@ -21,7 +21,7 @@ import {
 } from "redux-persist";
 
 /* =========================
-   ✅ CUSTOM STORAGE (VITE SAFE)
+   CUSTOM STORAGE (VITE SAFE)
 ========================= */
 const createNoopStorage = () => ({
   getItem: async () => null,
@@ -88,6 +88,10 @@ export const store = configureStore({
 
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
+      // FIX: Increase threshold for heavy state (land, audit, etc.)
+      immutableCheck: {
+        warnAfter: 128, 
+      },
       serializableCheck: {
         ignoredActions: [
           FLUSH,

@@ -1,8 +1,43 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, or, desc } from "drizzle-orm"; // Added or, desc
 import db from "../../drizzle/db";
 import { transferRequests, lands, auditLogs, landOwnershipHistory } from "../../drizzle/schema";
 import { transferLandOnChain } from "@/blockchain/blockchain.adapter";
 import { getTransferByIdService } from "./transfer.query.service";
+
+/**
+ * Fetch pending transfers with Role-Based filtering
+ * Fixes the 403 Forbidden by allowing Citizens to see their own 'pending' deals.
+ */
+export const getPendingTransfersService = async (userId: number, userRole: string) => {
+  // Base condition: The transfer must be in 'pending' status
+  const statusCondition = eq(transferRequests.status, "pending");
+
+  let finalCondition;
+
+  if (userRole === "citizen") {
+    // 🔥 FILTER: Citizen only sees transfers where they are the Buyer OR the Seller
+    finalCondition = and(
+      statusCondition,
+      or(
+        eq(transferRequests.buyerId, userId),
+        eq(transferRequests.sellerId, userId)
+      )
+    );
+  } else {
+    // OFFICER: Sees all pending transfers across the registry
+    finalCondition = statusCondition;
+  }
+
+  return await db.query.transferRequests.findMany({
+    where: finalCondition,
+    with: {
+      land: true,
+      buyer: true,
+      seller: true
+    },
+    orderBy: [desc(transferRequests.createdAt)]
+  });
+};
 
 export const approveTransferService = async (transferId: number, officerId: number) => {
   const transfer = await getTransferByIdService(transferId);

@@ -1,26 +1,22 @@
 import { baseApi } from "../../services/baseApi";
 
-/* ================================
-   TYPES (MATCH BACKEND)
-================================ */
+/* ============================================================
+   TYPES (MATCHING BACKEND WRAPPER)
+=========================================================== */
 export interface TransferRequest {
   id: number;
   landId: number;
   buyerId: number;
   sellerId: number;
-
   status:
     | "pending"
     | "payment_pending"
     | "paid"
     | "completed"
     | "rejected";
-
   mpesaReceiptCode?: string;
   blockchainTxHash?: string;
-
   createdAt: string;
-
   land: {
     id: number;
     lrNumber: string;
@@ -28,13 +24,11 @@ export interface TransferRequest {
     onChainId: number;
     priceInKsh: string;
   };
-
   buyer: {
     id: number;
     fullName: string;
     walletAddress: string;
   };
-
   seller: {
     id: number;
     fullName: string;
@@ -42,9 +36,16 @@ export interface TransferRequest {
   };
 }
 
-/* ================================
+// Helper interface for standard backend responses
+interface WrappedResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+}
+
+/* ============================================================
    PAYLOADS
-================================ */
+============================================================ */
 export interface CreateTransferPayload {
   landId: number;
 }
@@ -54,25 +55,24 @@ export interface RejectTransferPayload {
   reason: string;
 }
 
-/* ================================
+/* ============================================================
    API
-================================ */
+============================================================ */
 export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ============================================================
-       INITIATE TRANSFER (FIXED ✅)
+       INITIATE TRANSFER
     ============================================================ */
     createTransfer: builder.mutation<
-      { message: string; request: TransferRequest },
+      WrappedResponse<TransferRequest>,
       CreateTransferPayload
     >({
       query: (body) => ({
-        url: "/transfers/initiate", // ✅ FIXED
+        url: "/transfers/initiate",
         method: "POST",
         body,
       }),
-
       invalidatesTags: [{ type: "Transfer", id: "LIST" }],
     }),
 
@@ -81,7 +81,8 @@ export const transferApi = baseApi.injectEndpoints({
     ============================================================ */
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
-
+      // FIXED: Extract the array from the data wrapper
+      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
       providesTags: (result) =>
         result
           ? [
@@ -99,7 +100,8 @@ export const transferApi = baseApi.injectEndpoints({
     ============================================================ */
     getTransferById: builder.query<TransferRequest, number>({
       query: (id) => `/transfers/${id}`,
-
+      // FIXED: Extract single object from the data wrapper
+      transformResponse: (response: WrappedResponse<TransferRequest>) => response.data,
       providesTags: (_result, _error, id) => [
         { type: "Transfer", id },
       ],
@@ -108,12 +110,11 @@ export const transferApi = baseApi.injectEndpoints({
     /* ============================================================
        APPROVE TRANSFER (OFFICER)
     ============================================================ */
-    approveTransfer: builder.mutation<{ message: string }, number>({
+    approveTransfer: builder.mutation<WrappedResponse<null>, number>({
       query: (id) => ({
         url: `/transfers/approve/${id}`,
         method: "PATCH",
       }),
-
       invalidatesTags: (_result, _error, id) => [
         { type: "Transfer", id },
         { type: "Transfer", id: "LIST" },
@@ -125,7 +126,7 @@ export const transferApi = baseApi.injectEndpoints({
        REJECT TRANSFER (OFFICER)
     ============================================================ */
     rejectTransfer: builder.mutation<
-      { message: string },
+      WrappedResponse<null>,
       RejectTransferPayload
     >({
       query: ({ id, reason }) => ({
@@ -133,7 +134,6 @@ export const transferApi = baseApi.injectEndpoints({
         method: "PATCH",
         body: { reason },
       }),
-
       invalidatesTags: (_result, _error, arg) => [
         { type: "Transfer", id: arg.id },
         { type: "Transfer", id: "LIST" },
@@ -144,14 +144,13 @@ export const transferApi = baseApi.injectEndpoints({
        FINALIZE TRANSFER (BLOCKCHAIN)
     ============================================================ */
     finalizeTransfer: builder.mutation<
-      { message: string; txHash: string },
+      WrappedResponse<{ txHash: string }>,
       number
     >({
       query: (id) => ({
         url: `/transfers/finalize/${id}`,
         method: "PATCH",
       }),
-
       invalidatesTags: (_result, _error, id) => [
         { type: "Transfer", id },
         { type: "Transfer", id: "LIST" },
@@ -160,11 +159,12 @@ export const transferApi = baseApi.injectEndpoints({
     }),
 
     /* ============================================================
-       GET MY SALES (FIXED ✅)
+       GET MY SALES
     ============================================================ */
     getMySales: builder.query<TransferRequest[], void>({
-      query: () => "/transfers/my-sales", // ✅ FIXED
-
+      query: () => "/transfers/my-sales",
+      // FIXED: Extract the array from the data wrapper
+      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
       providesTags: (result) =>
         result
           ? [

@@ -5,7 +5,42 @@ import {
   finalizeTransferService,
   getPendingTransfersService
 } from "../services/index";
-import { getUserId } from "../../utils/auth.util";
+import { getUserId, getUserRole } from "../../utils/auth.util";
+
+/**
+ * Fetch pending transfers with Contextual Filtering
+ */
+export const getPending = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = getUserId(req);
+    const userRole = getUserRole(req); 
+
+    // 1. Validation Check: Ensure we have both ID and Role
+    if (!userId || !userRole) {
+      console.error(`[Auth Error] Missing credentials - ID: ${userId}, Role: ${userRole}`);
+      const error: any = new Error("Unauthorized: Invalid session or missing permissions");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    console.log(`%c[API] getPending hit by ${userRole} (ID: ${userId})`, "color: #4f46e5; font-weight: bold;");
+
+    // 2. Service Call: TypeScript is now happy because userRole is guaranteed to be a string here
+    const data = await getPendingTransfersService(userId, userRole);
+    
+    console.log(`[API] successfully retrieved ${data.length} records for ${userRole}`);
+
+    return res.status(200).json({
+      success: true,
+      roleScope: userRole,
+      count: data.length,
+      data: data
+    });
+  } catch (error: any) {
+    console.error("[API Error] getPending:", error.message);
+    next(error);
+  }
+};
 
 /**
  * Step 1: Officer approves the initial transfer request
@@ -32,7 +67,7 @@ export const approveTransfer = async (req: Request, res: Response, next: NextFun
 };
 
 /**
- * Officer rejects a transfer request (e.g., due to document issues)
+ * Officer rejects a transfer request
  */
 export const rejectTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -65,7 +100,6 @@ export const rejectTransfer = async (req: Request, res: Response, next: NextFunc
 
 /**
  * Step 2: Finalize the transfer (The Blockchain Step)
- * This triggers the actual ownership change on the smart contract.
  */
 export const finalizeTransfer = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -84,27 +118,9 @@ export const finalizeTransfer = async (req: Request, res: Response, next: NextFu
       data: result
     });
   } catch (error: any) {
-    // If it's a blockchain error, we flag it as 500 or 422 for the handler
     if (error.message.includes("Blockchain") || error.message.includes("contract")) {
       error.statusCode = 500;
     }
-    next(error);
-  }
-};
-
-/**
- * Fetch all transfers currently awaiting officer action
- */
-export const getPending = async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    const data = await getPendingTransfersService();
-    
-    return res.status(200).json({
-      success: true,
-      count: data.length,
-      data: data
-    });
-  } catch (error: any) {
     next(error);
   }
 };

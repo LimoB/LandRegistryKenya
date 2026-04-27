@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 
 /**
  * Verifies email using a token (from URL query or body)
- * Marks user as verified and cleans up the used token.
+ * Marks user as verified and cleans up the used token atomically.
  */
 export const verifyEmailController = async (
   req: Request,
@@ -13,12 +13,9 @@ export const verifyEmailController = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    // 1. Read token (Support both URL Query and Request Body)
+    // 1. Read and Normalize Token
     let { token } = req.query;
-
-    if (!token) {
-      token = req.body?.token;
-    }
+    if (!token) token = req.body?.token;
 
     if (!token) {
       const error: any = new Error("Verification code is required");
@@ -26,11 +23,7 @@ export const verifyEmailController = async (
       throw error;
     }
 
-    // Normalize token (handle arrays or whitespace)
-    if (Array.isArray(token)) {
-      token = token[0];
-    }
-    const normalizedToken = String(token).trim();
+    const normalizedToken = String(Array.isArray(token) ? token[0] : token).trim();
 
     // 2. Find verification token in DB
     const storedToken = await db.query.verificationTokens.findFirst({
@@ -48,11 +41,7 @@ export const verifyEmailController = async (
 
     // 3. Check Expiry
     if (storedToken.expiresAt < new Date()) {
-      // Cleanup expired token automatically
-      await db.delete(verificationTokens).where(
-        eq(verificationTokens.id, storedToken.id)
-      );
-
+      await db.delete(verificationTokens).where(eq(verificationTokens.id, storedToken.id));
       const error: any = new Error("Verification code has expired. Please request a new one.");
       error.statusCode = 400;
       throw error;
@@ -69,42 +58,45 @@ export const verifyEmailController = async (
       throw error;
     }
 
-    // 5. Check if already verified (Idempotency)
+    // 5. Handle already verified status
     if (user.isVerified) {
-      // Cleanup token anyway since it's no longer needed
-      await db.delete(verificationTokens).where(
-        eq(verificationTokens.id, storedToken.id)
-      );
-
+      await db.delete(verificationTokens).where(eq(verificationTokens.id, storedToken.id));
       res.status(200).json({
         success: true,
-        message: "Account is already verified. Please proceed to log in."
+        message: "Account is already verified. Please proceed to log in.",
+        data: { email: user.email }
       });
       return;
     }
 
-    // 6. Atomically update user status
-    await db.update(users)
-      .set({
-        isVerified: true,
-        emailVerifiedAt: new Date()
-      })
-      .where(eq(users.id, user.id));
+    // 6 & 7. ATOMIC TRANSACTION: Update User & Delete Token
+    // This ensures both operations succeed or both fail together.
+    await db.transaction(async (tx) => {
+      await tx.update(users)
+        .set({
+          isVerified: true,
+          emailVerifiedAt: new Date()
+        })
+        .where(eq(users.id, user.id));
 
-    // 7. Delete token (Single-use security)
-    await db.delete(verificationTokens).where(
-      eq(verificationTokens.id, storedToken.id)
-    );
+      await tx.delete(verificationTokens)
+        .where(eq(verificationTokens.id, storedToken.id));
+    });
 
     // 8. Success Response
     res.status(200).json({
       success: true,
-      message: "Email verified successfully. Welcome to the Kenyan Land Registry Portal."
+      message: "Email verified successfully. Welcome to the Kenyan Land Registry Portal.",
+      data: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role
+      }
     });
     return;
 
   } catch (error) {
-    // Passes to your globalErrorHandler in app.ts
     next(error);
   }
 };

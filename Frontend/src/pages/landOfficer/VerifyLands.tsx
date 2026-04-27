@@ -8,9 +8,9 @@ import { useBlockchain } from "../../features/blockchain/useBlockchain";
 import { ethers } from "ethers";
 import { FileSearch, CheckCircle, Loader2 } from "lucide-react";
 import LandCard from "../../components/officer/LandCard";
+import toast from "react-hot-toast";
 
 /* TYPES */
-// Fixed: replaced 'any' with 'unknown' for the data field
 interface TransactionError {
   reason?: string;
   message?: string;
@@ -29,23 +29,16 @@ const VerifyLands: React.FC = () => {
   const handleApproveAndMint = async (land: Land) => {
     setProcessingId(land.id);
     
-    console.log("Process started for Land ID:", land.id);
-    
-    try {
-      // 1. Clean and Validate Address
+    // Create the promise for toast to track
+    const processAction = async () => {
+      // 1. Validate Address
       const rawAddress = land.owner?.walletAddress?.trim();
-      if (!rawAddress) {
-        throw new Error("The owner does not have a wallet address assigned.");
-      }
-
+      if (!rawAddress) throw new Error("Owner wallet address is missing.");
       const validatedAddress = ethers.getAddress(rawAddress.toLowerCase());
 
-      // 2. Blockchain Connection
+      // 2. Blockchain Logic
       await connectWallet();
       const contract = await getContract();
-
-      // 3. Execution
-      console.log("Initiating transaction for LR:", land.lrNumber);
       
       const transaction = await contract.registerLand(
         validatedAddress, 
@@ -53,31 +46,32 @@ const VerifyLands: React.FC = () => {
         land.ipfsDocHash || "N/A"
       );
 
-      console.log("Transaction sent. Hash:", transaction.hash);
+      // Wait for block confirmation
       await transaction.wait();
       
-      // 4. Backend Sync
+      // 3. Backend Sync
       await verifyLand(land.id).unwrap();
-      alert(`Success! ${land.lrNumber} is now officially registered.`);
       
-    } catch (err: unknown) {
-      // Fixed: Cast 'err' to 'TransactionError' so we avoid 'any'
-      const error = err as TransactionError;
-      console.error("Critical error in handleApproveAndMint:", error);
-      
-      let errorMessage = "An unexpected error occurred.";
+      return land.lrNumber;
+    };
 
-      if (error.message?.includes("estimateGas") || error.message?.includes("Internal JSON-RPC error")) {
-        errorMessage = "Blockchain Revert: You may not have permission to register land, or this LR Number already exists on-chain.";
-      } else if (error.message?.includes("bad address checksum")) {
-        errorMessage = "Address verification failed. The wallet address format is incorrect.";
-      } else if (error.reason) {
-        errorMessage = error.reason;
-      } else if (error.message) {
-        errorMessage = error.message;
+    // Trigger the themed toast
+    toast.promise(processAction(), {
+      loading: `Verifying ${land.lrNumber} on the ledger...`,
+      success: (lr) => `Land ${lr} successfully registered!`,
+      error: (err: unknown) => {
+        const error = err as TransactionError;
+        // Smart error messaging
+        if (error.message?.includes("user rejected")) return "Transaction cancelled by user.";
+        if (error.message?.includes("estimateGas")) return "Chain Revert: Likely duplicate LR Number.";
+        return error.reason || error.message || "Failed to verify land.";
       }
-        
-      alert(errorMessage);
+    });
+
+    try {
+      await processAction;
+    } catch (error) {
+      console.error("Verification Flow Error:", error);
     } finally {
       setProcessingId(null);
     }
@@ -85,19 +79,20 @@ const VerifyLands: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 p-6">
-      <div className="border-b border-slate-100 dark:border-slate-900 pb-6">
-        <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-          <FileSearch className="text-blue-600" /> New Land Requests
+      <div className="border-b border-border pb-6">
+        <h1 className="text-2xl font-black text-text flex items-center gap-3">
+          <FileSearch className="text-primary" /> New Land Requests
         </h1>
-        <p className="text-sm text-slate-500 mt-1 uppercase font-bold tracking-tight">
+        <p className="text-sm text-text/50 mt-1 uppercase font-bold tracking-tight">
           Review these records and save them to the permanent ledger
         </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
         {isLoading ? (
-          <div className="py-20 text-center text-slate-400 font-black uppercase text-xs">
-            <Loader2 className="animate-spin mx-auto mb-2" /> Searching Records...
+          <div className="py-20 text-center text-text/40 font-black uppercase text-xs">
+            <Loader2 className="animate-spin mx-auto mb-2 text-primary" /> 
+            Searching Records...
           </div>
         ) : pendingLands.length > 0 ? (
           pendingLands.map((land) => (
@@ -109,9 +104,9 @@ const VerifyLands: React.FC = () => {
             />
           ))
         ) : (
-          <div className="py-24 text-center border-2 border-dashed border-slate-100 dark:border-slate-900 rounded-3xl">
-            <CheckCircle className="mx-auto text-slate-200 mb-4" size={48} />
-            <p className="text-slate-400 font-black uppercase text-xs tracking-widest">
+          <div className="py-24 text-center border-2 border-dashed border-border rounded-3xl bg-card/30">
+            <CheckCircle className="mx-auto text-border mb-4" size={48} />
+            <p className="text-text/40 font-black uppercase text-xs tracking-widest">
               No records waiting for review
             </p>
           </div>

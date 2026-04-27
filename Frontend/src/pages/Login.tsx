@@ -45,7 +45,6 @@ const Login: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -64,6 +63,7 @@ const Login: React.FC = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    console.log("Login attempt for:", formData.email);
     const toastId = toast.loading("Signing in...");
 
     try {
@@ -72,12 +72,19 @@ const Login: React.FC = () => {
         password: formData.password,
       }).unwrap();
 
-      toast.success(`Welcome back, ${res.user.fullName.split(" ")[0]}`, {
+      // DEBUG LOG
+      console.log("Login Success Response:", res);
+
+      // Accessing res.data because of our updated AuthResponse interface
+      const user = res.data; 
+
+      toast.success(`Welcome back, ${user.fullName.split(" ")[0]}`, {
         id: toastId,
       });
 
       // ROLE ROUTING
-      switch (res.user.role) {
+      console.log("Routing user based on role:", user.role);
+      switch (user.role) {
         case "admin":
           navigate("/admin/dashboard");
           break;
@@ -88,28 +95,24 @@ const Login: React.FC = () => {
           navigate("/citizen/dashboard");
       }
     } catch (err: unknown) {
+      // DEBUG LOG
+      console.error("Login Error Object:", err);
+
       const error = err as FetchBaseQueryError & {
-        data?: { message?: string; error?: string };
+        data?: { message?: string; error?: string; code?: string };
       };
 
       const status = error?.status;
-      const message =
-        error?.data?.message ||
-        error?.data?.error ||
-        "Login failed";
+      const message = error?.data?.message || error?.data?.error || "Login failed";
+      const errorCode = error?.data?.code;
+
+      console.warn(`Status: ${status} | Message: ${message} | Code: ${errorCode}`);
 
       // EMAIL VERIFICATION FLOW
-      const isVerificationIssue =
-        status === 403 ||
-        message.toLowerCase().includes("verify");
-
-      if (isVerificationIssue) {
+      if (status === 403 || errorCode === "EMAIL_NOT_VERIFIED") {
+        console.log("Redirecting to verification flow...");
         dispatch(setLoginPendingVerification(formData.email));
-
-        toast.error("Please verify your account first", {
-          id: toastId,
-        });
-
+        toast.error("Please verify your account first", { id: toastId });
         navigate("/verify-email");
         return;
       }
@@ -120,30 +123,25 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-bg text-text">
-
       {/* LEFT SIDE */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm space-y-8">
-
           {/* HEADER */}
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
+            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary uppercase tracking-wider font-bold">
               <ShieldCheck size={12} />
-              Secure Login
+              Secure Portal
             </div>
-
-            <h2 className="text-2xl font-semibold">
+            <h2 className="text-2xl font-semibold tracking-tight">
               Sign in to your account
             </h2>
-
             <p className="text-xs text-text/50">
-              Access your land registry dashboard
+              Kenyan Land Registry Management System
             </p>
           </div>
 
           {/* FORM */}
           <form onSubmit={handleSubmit} className="space-y-4">
-
             <InputField
               icon={<Mail size={16} />}
               type="email"
@@ -155,24 +153,22 @@ const Login: React.FC = () => {
 
             {/* PASSWORD */}
             <div className="relative group">
-              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary transition-colors">
                 <Lock size={16} />
               </div>
-
               <input
                 type={showPassword ? "text" : "password"}
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
                 placeholder="Password"
-                className="w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                 required
               />
-
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-text/40 hover:text-primary"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text/40 hover:text-primary transition-colors"
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -180,19 +176,18 @@ const Login: React.FC = () => {
 
             {/* OPTIONS */}
             <div className="flex items-center justify-between text-xs">
-              <label className="flex items-center gap-2 text-text/50">
+              <label className="flex items-center gap-2 text-text/50 cursor-pointer">
                 <input
                   type="checkbox"
                   name="rememberMe"
                   checked={formData.rememberMe}
                   onChange={handleInputChange}
-                  className="w-3.5 h-3.5"
+                  className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary/20"
                 />
                 Remember me
               </label>
-
-              <Link to="/forgot-password" className="text-primary hover:underline">
-                Forgot?
+              <Link to="/forgot-password" className="text-primary hover:underline font-medium">
+                Forgot password?
               </Link>
             </div>
 
@@ -200,7 +195,7 @@ const Login: React.FC = () => {
             <button
               disabled={isLoading}
               type="submit"
-              className="w-full py-2.5 text-sm rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 transition"
+              className="w-full py-2.5 text-sm font-semibold rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary/20"
             >
               {isLoading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -214,34 +209,34 @@ const Login: React.FC = () => {
 
           {/* FOOTER */}
           <div className="text-center text-xs text-text/50">
-            No account?{" "}
-            <Link to="/register" className="text-primary">
-              Create one
+            Don&apos;t have an account?{" "}
+            <Link to="/register" className="text-primary font-bold hover:underline">
+              Create an account
             </Link>
           </div>
         </div>
       </div>
 
-      {/* RIGHT SIDE */}
-      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-emerald-500 text-white">
-
-        <div className="max-w-xs text-center space-y-5">
-
-          <div className="mx-auto p-4 bg-white/10 rounded-xl">
-            <Fingerprint size={40} />
+      {/* RIGHT SIDE (DESKTOP ONLY) */}
+      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-700 to-emerald-600 text-white relative overflow-hidden">
+        <div className="absolute inset-0 bg-black/10" />
+        <div className="max-w-xs text-center space-y-6 relative z-10">
+          <div className="mx-auto w-20 h-20 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl">
+            <Fingerprint size={48} />
           </div>
-
-          <h3 className="text-xl font-semibold">
-            Land Registry System
-          </h3>
-
-          <p className="text-xs text-white/80">
-            Secure and transparent land ownership platform.
-          </p>
-
-          <div className="flex items-start gap-2 text-[11px] bg-white/10 p-3 rounded-lg">
-            <Info size={14} />
-            All login activity is monitored for security.
+          <div className="space-y-2">
+            <h3 className="text-2xl font-bold tracking-tight">
+              LIMS Digital Portal
+            </h3>
+            <p className="text-sm text-white/80 leading-relaxed">
+              Verify, transfer, and manage land ownership with blockchain transparency.
+            </p>
+          </div>
+          <div className="flex items-start gap-3 text-left text-[11px] bg-black/20 backdrop-blur-sm p-4 rounded-xl border border-white/10">
+            <Info size={18} className="shrink-0 text-emerald-300" />
+            <p className="opacity-90">
+              This is a secure government-monitored system. Unauthorized access attempts are logged and reported.
+            </p>
           </div>
         </div>
       </div>
@@ -249,7 +244,7 @@ const Login: React.FC = () => {
   );
 };
 
-/* ================= INPUT ================= */
+/* ================= INPUT FIELD COMPONENT ================= */
 const InputField: React.FC<InputFieldProps> = ({
   icon,
   type = "text",
@@ -259,17 +254,16 @@ const InputField: React.FC<InputFieldProps> = ({
   onChange,
 }) => (
   <div className="relative group">
-    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary transition-colors">
       {icon}
     </div>
-
     <input
       name={name}
       type={type}
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full pl-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+      className="w-full pl-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
       required
     />
   </div>

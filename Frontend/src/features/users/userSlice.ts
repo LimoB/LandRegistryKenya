@@ -5,8 +5,10 @@ import type { User } from "./userApi";
    STATE TYPES
 ============================================================ */
 interface UserState {
-  selectedUser: User | null;
+  // currentUser is the logged-in user (from /me)
   currentUser: User | null;
+  // selectedUser is for Admin/Officer management tasks
+  selectedUser: User | null;
 
   showEditModal: boolean;
   showProfileModal: boolean;
@@ -23,8 +25,8 @@ interface UserState {
    INITIAL STATE
 ============================================================ */
 const initialState: UserState = {
-  selectedUser: null,
   currentUser: null,
+  selectedUser: null,
 
   showEditModal: false,
   showProfileModal: false,
@@ -46,14 +48,18 @@ const userSlice = createSlice({
   reducers: {
 
     /* ======================
-       USER SELECTION
+       AUTH & IDENTITY
+    ====================== */
+    // Used when the app loads or after login to store "Me"
+    setCurrentUser: (state, action: PayloadAction<User | null>) => {
+      state.currentUser = action.payload;
+    },
+
+    /* ======================
+       USER SELECTION (ADMIN)
     ====================== */
     setSelectedUser: (state, action: PayloadAction<User | null>) => {
       state.selectedUser = action.payload;
-    },
-
-    setCurrentUser: (state, action: PayloadAction<User | null>) => {
-      state.currentUser = action.payload;
     },
 
     /* ======================
@@ -73,7 +79,8 @@ const userSlice = createSlice({
     /* ======================
        MODALS CONTROL
     ====================== */
-    openEditModal: (state, action: PayloadAction<User | null>) => {
+    // For Admin to edit a citizen/officer
+    openEditModal: (state, action: PayloadAction<User>) => {
       state.selectedUser = action.payload;
       state.showEditModal = true;
     },
@@ -82,16 +89,16 @@ const userSlice = createSlice({
       state.selectedUser = null;
     },
 
-    openProfileModal: (state, action: PayloadAction<User | null>) => {
-      state.selectedUser = action.payload;
+    // For a user to view/edit their own profile
+    openProfileModal: (state) => {
       state.showProfileModal = true;
     },
     closeProfileModal: (state) => {
       state.showProfileModal = false;
-      state.selectedUser = null;
     },
 
-    openViewModal: (state, action: PayloadAction<User | null>) => {
+    // For Admin/Officer to view detailed land/history of a user
+    openViewModal: (state, action: PayloadAction<User>) => {
       state.selectedUser = action.payload;
       state.showViewModal = true;
     },
@@ -113,18 +120,13 @@ const userSlice = createSlice({
 export const {
   setSelectedUser,
   setCurrentUser,
-
   setUserLoading,
-
   openEditModal,
   closeEditModal,
-
   openProfileModal,
   closeProfileModal,
-
   openViewModal,
   closeViewModal,
-
   resetUserState,
 } = userSlice.actions;
 

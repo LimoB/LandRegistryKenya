@@ -284,27 +284,30 @@ export const auditLogs = pgTable("audit_logs", {
 
   createdAt: timestamp("created_at").defaultNow()
 });
-
-
 /* ================= RELATIONS ================= */
+
 /* ================= USERS ================= */
 
 export const userRelations = relations(users, ({ many }) => ({
-  ownedLands: many(lands),
+  // Land Relations (Naming required due to owner vs verifier)
+  ownedLands: many(lands, { relationName: "land_owner" }),
+  verifiedLands: many(lands, { relationName: "land_verifier" }),
 
+  // Transfer Request Relations
   sentRequests: many(transferRequests, {
     relationName: "sentRequests"
   }),
-
   receivedRequests: many(transferRequests, {
     relationName: "receivedRequests"
   }),
 
-  logs: many(auditLogs),
-  tokens: many(verificationTokens),
+  // Ownership History (Naming required due to from vs to)
+  ownershipHistoryFrom: many(landOwnershipHistory, { relationName: "history_from" }),
+  ownershipHistoryTo: many(landOwnershipHistory, { relationName: "history_to" }),
 
-  ownershipHistoryFrom: many(landOwnershipHistory),
-  ownershipHistoryTo: many(landOwnershipHistory)
+  // Simple Relations
+  logs: many(auditLogs),
+  tokens: many(verificationTokens)
 }));
 
 /* ================= TOKENS ================= */
@@ -321,20 +324,19 @@ export const tokenRelations = relations(verificationTokens, ({ one }) => ({
 export const landRelations = relations(lands, ({ one, many }) => ({
   owner: one(users, {
     fields: [lands.ownerId],
-    references: [users.id]
+    references: [users.id],
+    relationName: "land_owner"
   }),
 
   verifier: one(users, {
     fields: [lands.verifiedBy],
-    references: [users.id]
+    references: [users.id],
+    relationName: "land_verifier"
   }),
 
   transferRequests: many(transferRequests),
-
   payments: many(payments),
-
   auditLogs: many(auditLogs),
-
   ownershipHistory: many(landOwnershipHistory)
 }));
 
@@ -390,12 +392,14 @@ export const ownershipRelations = relations(
 
     fromOwner: one(users, {
       fields: [landOwnershipHistory.fromOwnerId],
-      references: [users.id]
+      references: [users.id],
+      relationName: "history_from"
     }),
 
     toOwner: one(users, {
       fields: [landOwnershipHistory.toOwnerId],
-      references: [users.id]
+      references: [users.id],
+      relationName: "history_to"
     })
   })
 );

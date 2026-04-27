@@ -15,10 +15,12 @@ export interface User {
   isVerified?: boolean;
 }
 
+// Adjusted to match backend: res.json({ success, message, token, data: user })
 export interface AuthResponse {
+  success: boolean;
   message: string;
   token: string;
-  user: User;
+  data: User; 
 }
 
 /* ============================================================
@@ -70,15 +72,19 @@ export const authApi = baseApi.injectEndpoints({
       async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
-          dispatch(setCredentials(data));
+          // Mapping data.data (the user) and data.token to credentials
+          dispatch(setCredentials({
+            user: data.data,
+            token: data.token
+          }));
         } catch {
-          // handled in UI
+          // No "error" variable here to avoid ESLint unused-var errors
         }
       },
     }),
 
     register: builder.mutation<
-      { message: string; user: User },
+      { success: boolean; message: string; data: User },
       RegisterPayload
     >({
       query: (data) => ({
@@ -88,7 +94,10 @@ export const authApi = baseApi.injectEndpoints({
       }),
     }),
 
-    verifyEmail: builder.mutation<{ message: string }, VerifyEmailPayload>({
+    verifyEmail: builder.mutation<
+      { success: boolean; message: string; data?: Partial<User> }, 
+      VerifyEmailPayload
+    >({
       query: ({ token }) => ({
         url: `/auth/verify-email?token=${encodeURIComponent(token)}`,
         method: "GET",
@@ -96,7 +105,7 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     resendVerification: builder.mutation<
-      { message: string },
+      { success: boolean; message: string },
       ResendVerificationPayload
     >({
       query: (data) => ({
@@ -107,7 +116,7 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     forgotPassword: builder.mutation<
-      { message: string },
+      { success: boolean; message: string },
       ForgotPasswordPayload
     >({
       query: (data) => ({
@@ -118,7 +127,7 @@ export const authApi = baseApi.injectEndpoints({
     }),
 
     resetPassword: builder.mutation<
-      { message: string },
+      { success: boolean; message: string },
       ResetPasswordPayload
     >({
       query: (data) => ({

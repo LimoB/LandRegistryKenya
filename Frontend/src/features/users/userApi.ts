@@ -55,6 +55,14 @@ export interface User {
   ownershipHistoryTo?: OwnershipHistory[];
 }
 
+// Wrapper for the standard API response structure
+export interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+  count?: number;
+}
+
 /* ================================
    PAYLOADS
 ================================ */
@@ -81,14 +89,13 @@ export const userApi = baseApi.injectEndpoints({
     /* ======================
        GET ALL USERS
     ====================== */
-    getUsers: builder.query<User[], void>({
+    getUsers: builder.query<ApiResponse<User[]>, void>({
       query: () => "/users",
-
       providesTags: (result) =>
-        result
+        result?.data
           ? [
               { type: "User" as const, id: "LIST" },
-              ...result.map((u) => ({
+              ...result.data.map((u) => ({
                 type: "User" as const,
                 id: u.id,
               })),
@@ -99,20 +106,19 @@ export const userApi = baseApi.injectEndpoints({
     /* ======================
        GET USER BY ID
     ====================== */
-    getUserById: builder.query<User, number>({
+    getUserById: builder.query<ApiResponse<User>, number>({
       query: (id) => `/users/${id}`,
-
       providesTags: (_result, _error, id) => [
         { type: "User" as const, id },
       ],
     }),
 
     /* ======================
-       GET CURRENT USER
+       GET CURRENT USER (ME)
     ====================== */
-    getMe: builder.query<User, void>({
+    getMe: builder.query<ApiResponse<User>, void>({
       query: () => "/users/me",
-
+      // Using "ME" tag allows us to invalidate just the current user's cache
       providesTags: [{ type: "User" as const, id: "ME" }],
     }),
 
@@ -120,7 +126,7 @@ export const userApi = baseApi.injectEndpoints({
        UPDATE USER (ADMIN)
     ====================== */
     updateUser: builder.mutation<
-      { message: string; user: User },
+      ApiResponse<User>,
       { id: number; payload: UpdateUserPayload }
     >({
       query: ({ id, payload }) => ({
@@ -128,22 +134,21 @@ export const userApi = baseApi.injectEndpoints({
         method: "PUT",
         body: payload,
       }),
-
       invalidatesTags: (_result, _error, { id }) => [
         { type: "User" as const, id },
         { type: "User" as const, id: "LIST" },
+        { type: "User" as const, id: "ME" }, // Invalidate ME in case admin updates current user
       ],
     }),
 
     /* ======================
        DELETE USER
     ====================== */
-    deleteUser: builder.mutation<{ message: string }, number>({
+    deleteUser: builder.mutation<ApiResponse<void>, number>({
       query: (id) => ({
         url: `/users/${id}`,
         method: "DELETE",
       }),
-
       invalidatesTags: [{ type: "User" as const, id: "LIST" }],
     }),
 
@@ -151,7 +156,7 @@ export const userApi = baseApi.injectEndpoints({
        UPDATE PROFILE (SELF)
     ====================== */
     updateProfile: builder.mutation<
-      { message: string; user: User },
+      ApiResponse<User>,
       UpdateProfilePayload
     >({
       query: (payload) => ({
@@ -159,7 +164,7 @@ export const userApi = baseApi.injectEndpoints({
         method: "PUT",
         body: payload,
       }),
-
+      // This ensures that after updating, getMe fetches the fresh data
       invalidatesTags: [{ type: "User" as const, id: "ME" }],
     }),
   }),

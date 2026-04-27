@@ -50,7 +50,6 @@ const Register: React.FC = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
     setForm((prev) => ({
       ...prev,
       [name]: value,
@@ -71,16 +70,19 @@ const Register: React.FC = () => {
       const accounts = await provider.send("eth_requestAccounts", []);
 
       if (accounts?.length) {
+        // Normalize to lowercase to match backend logic
+        const address = accounts[0].toLowerCase();
         setForm((prev) => ({
           ...prev,
-          walletAddress: accounts[0],
+          walletAddress: address,
         }));
 
         toast.success("Wallet connected", { id: toastId });
       } else {
         toast.error("No wallet found", { id: toastId });
       }
-    } catch {
+    } catch (err) {
+      console.error("Wallet connection error:", err);
       toast.error("Wallet connection failed", { id: toastId });
     }
   };
@@ -99,7 +101,7 @@ const Register: React.FC = () => {
     }
 
     if (!ethers.isAddress(form.walletAddress)) {
-      toast.error("Invalid wallet address");
+      toast.error("Invalid wallet address format");
       return false;
     }
 
@@ -119,57 +121,61 @@ const Register: React.FC = () => {
     const toastId = toast.loading("Creating account...");
 
     try {
+      // Backend returns { success, message, data: User }
       const res = await register(form).unwrap();
 
+      // Store email in state for the resend-verification feature on the next page
       dispatch(setLoginPendingVerification(form.email));
 
-      toast.success(res.message || "Account created", {
+      toast.success(res.message || "Account created successfully", {
         id: toastId,
       });
 
+      console.log("Registration successful for:", res.data.email);
       navigate("/verify-email");
     } catch (err: unknown) {
+      console.error("Registration error:", err);
+      
       const error = err as FetchBaseQueryError & {
-        data?: { message?: string };
+        data?: { message?: string; error?: string };
       };
 
-      toast.error(
-        error?.data?.message || "Registration failed",
-        { id: toastId }
-      );
+      const errorMessage =
+        error?.data?.message || 
+        error?.data?.error || 
+        "Registration failed";
+
+      toast.error(errorMessage, { id: toastId });
     }
   };
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-bg text-text">
-
       {/* LEFT SIDE */}
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm space-y-8">
-
           {/* HEADER */}
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary">
+            <div className="inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full bg-primary/10 text-primary uppercase font-bold tracking-widest">
               <ShieldCheck size={12} />
-              Create Account
+              Account Registration
             </div>
 
-            <h2 className="text-2xl font-semibold">
-              Register account
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Create your account
             </h2>
 
             <p className="text-xs text-text/50">
-              Access the land registry platform
+              Join the Kenyan digital land management system
             </p>
           </div>
 
           {/* FORM */}
           <form onSubmit={handleSubmit} className="space-y-4">
-
             <InputField
               icon={<User size={16} />}
               name="fullName"
-              placeholder="Full name"
+              placeholder="Full Name"
               value={form.fullName}
               onChange={handleChange}
             />
@@ -178,7 +184,7 @@ const Register: React.FC = () => {
               icon={<Mail size={16} />}
               type="email"
               name="email"
-              placeholder="Email"
+              placeholder="Email Address"
               value={form.email}
               onChange={handleChange}
             />
@@ -186,7 +192,7 @@ const Register: React.FC = () => {
             <InputField
               icon={<FileDigit size={16} />}
               name="idNumber"
-              placeholder="ID number"
+              placeholder="National ID Number"
               value={form.idNumber}
               onChange={handleChange}
             />
@@ -194,7 +200,7 @@ const Register: React.FC = () => {
             <InputField
               icon={<Wallet size={16} />}
               name="walletAddress"
-              placeholder="Wallet address"
+              placeholder="Web3 Wallet Address"
               value={form.walletAddress}
               onChange={handleChange}
               isMono
@@ -202,7 +208,8 @@ const Register: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleFetchWallet}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary rounded-md hover:opacity-80"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-primary/10 text-primary rounded-md hover:bg-primary/20 transition-colors"
+                  title="Fetch from MetaMask"
                 >
                   <RefreshCw size={14} />
                 </button>
@@ -221,13 +228,13 @@ const Register: React.FC = () => {
             <button
               disabled={isLoading}
               type="submit"
-              className="w-full py-2.5 text-sm rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 transition"
+              className="w-full py-2.5 text-sm font-semibold rounded-lg bg-primary text-white flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
             >
               {isLoading ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
                 <>
-                  Create Account <ArrowRight size={14} />
+                  Register Account <ArrowRight size={14} />
                 </>
               )}
             </button>
@@ -236,37 +243,41 @@ const Register: React.FC = () => {
           {/* FOOTER */}
           <div className="text-center text-xs text-text/50">
             Already have an account?{" "}
-            <Link to="/login" className="text-primary">
-              Sign in
+            <Link to="/login" className="text-primary font-bold hover:underline">
+              Sign in here
             </Link>
           </div>
         </div>
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-600 to-emerald-500 text-white">
-
-        <div className="max-w-xs text-center space-y-5">
-
-          <div className="mx-auto p-4 bg-white/10 rounded-xl">
+      <div className="hidden lg:flex items-center justify-center bg-gradient-to-br from-blue-700 to-emerald-600 text-white relative">
+        <div className="max-w-xs text-center space-y-6 relative z-10">
+          <div className="mx-auto w-16 h-16 flex items-center justify-center bg-white/10 backdrop-blur-md rounded-2xl border border-white/20">
             <ShieldCheck size={40} />
           </div>
 
-          <h3 className="text-xl font-semibold">
-            Land Registry System
-          </h3>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold tracking-tight">
+              Secure Land Registry
+            </h3>
+            <p className="text-xs text-white/80 leading-relaxed">
+              Experience a transparent and tamper-proof ecosystem for managing property deeds and land transfers.
+            </p>
+          </div>
 
-          <p className="text-xs text-white/80">
-            Secure identity-based land registration powered by blockchain.
-          </p>
-
+          <div className="p-4 bg-black/10 rounded-xl border border-white/5 text-[11px] text-left">
+            <p className="opacity-70">
+              Note: Registration requires a valid Web3 wallet address for on-chain identity verification and title deed minting.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-/* ================= INPUT ================= */
+/* ================= INPUT FIELD COMPONENT ================= */
 const InputField: React.FC<InputFieldProps> = ({
   icon,
   type = "text",
@@ -278,7 +289,7 @@ const InputField: React.FC<InputFieldProps> = ({
   rightElement,
 }) => (
   <div className="relative group">
-    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary">
+    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text/40 group-focus-within:text-primary transition-colors">
       {icon}
     </div>
 
@@ -288,8 +299,8 @@ const InputField: React.FC<InputFieldProps> = ({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className={`w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
-        isMono ? "font-mono text-xs" : ""
+      className={`w-full pl-10 pr-10 py-2.5 text-sm rounded-lg bg-card border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${
+        isMono ? "font-mono text-[11px]" : ""
       }`}
       required
     />

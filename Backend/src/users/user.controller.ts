@@ -25,12 +25,44 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
 };
 
 /* ================================
+   GET CURRENT USER (ME)
+================================ */
+export const getMe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Extract userId from the authenticated token (set by bearAuth middleware)
+    const userId = req.user?.userId;
+
+    if (!userId) {
+      const error: any = new Error("Unauthorized: No session found");
+      error.statusCode = 401;
+      throw error;
+    }
+
+    const user = await getUserByIdService(Number(userId));
+
+    if (!user) {
+      const error: any = new Error("User not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/* ================================
    GET USER BY ID
 =============================== */
 export const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = Number(req.params.id);
     
+    // Safety check: If the route is /me but hits this by mistake
     if (isNaN(userId)) {
       const error: any = new Error("Invalid User ID format");
       error.statusCode = 400;
@@ -69,7 +101,7 @@ export const updateUser = async (req: Request, res: Response, next: NextFunction
     }
 
     const updatedUser = await updateUserService(
-      adminId,
+      Number(adminId),
       Number(req.params.id),
       req.body
     );
@@ -97,7 +129,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       throw error;
     }
 
-    const updatedUser = await updateProfileService(userId, req.body);
+    const updatedUser = await updateProfileService(Number(userId), req.body);
 
     return res.status(200).json({
       success: true,
@@ -123,7 +155,7 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
       throw error;
     }
 
-    await deleteUserService(adminId, Number(req.params.id));
+    await deleteUserService(Number(adminId), Number(req.params.id));
 
     return res.status(200).json({ 
       success: true,

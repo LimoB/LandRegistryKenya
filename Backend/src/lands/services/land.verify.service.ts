@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { lands, auditLogs } from "../../drizzle/schema";
 import { registerLandOnChainService } from "../../blockchain/services";
-import { ethers } from "ethers";
 
 /**
  * Verifies land locally and mints the record on the blockchain
@@ -20,41 +19,37 @@ export const verifyLandService = async (landId: number, officerId: number) => {
 
   // 2. Blockchain Minting
   let txHash: string;
-  let finalBlockNumber: number; // Changed to number to match your Drizzle schema
+  let finalBlockNumber: number;
 
   try {
-    // We cast this to 'any' or 'ethers.ContractTransactionResponse' 
-    // to ensure the 'wait' method is recognized by TypeScript
-    const txResponse = await registerLandOnChainService(
+    // Your blockchain service already handles tx.wait() and returns { hash, blockNumber }
+    const receipt = await registerLandOnChainService(
       land.owner.walletAddress,
       land.lrNumber,
       land.ipfsDocHash || "N/A"
-    ) as any; 
+    );
 
-    txHash = txResponse.hash;
-
-    // Wait for the transaction to be mined
-    const receipt = await txResponse.wait();
-    
-    if (!receipt) throw new Error("Transaction failed: No receipt received");
-    
-    // Convert to Number because your Drizzle schema expects a number, not a string
+    // No need for as any or .wait() here because we are receiving plain data
+    txHash = receipt.hash;
     finalBlockNumber = Number(receipt.blockNumber);
+
+    console.log(`[SERVICE] Blockchain record finalized in block: ${finalBlockNumber}`);
   } catch (error: any) {
-    console.error("Blockchain Error:", error);
+    console.error("Blockchain Error Context:", error);
+    // Standardizing error message for the frontend
     throw new Error(`Blockchain mint failed: ${error.message}`);
   }
 
   // 3. Database Finalization (Atomic Transaction)
   try {
     return await db.transaction(async (trx) => {
-      // Update land status
+      // Update land status in PostgreSQL
       const [updated] = await trx
         .update(lands)
         .set({
           verificationStatus: "verified",
           blockchainTxHash: txHash,
-          blockNumber: finalBlockNumber, // Now passes as a number
+          blockNumber: finalBlockNumber,
           verifiedBy: officerId,
           verifiedAt: new Date(),
           updatedAt: new Date()
@@ -67,7 +62,8 @@ export const verifyLandService = async (landId: number, officerId: number) => {
         actionType: "LAND_VERIFIED",
         performedBy: officerId,
         landId,
-        blockchainTxHash: txHash
+        blockchainTxHash: txHash,
+        createdAt: new Date()
       });
 
       return {
@@ -78,6 +74,7 @@ export const verifyLandService = async (landId: number, officerId: number) => {
     });
   } catch (dbError: any) {
     console.error("Database Transaction Error:", dbError);
+    // If we reach here, the land is minted on-chain but the DB failed to update.
     throw new Error(`On-chain success, but local DB update failed: ${dbError.message}`);
   }
 };

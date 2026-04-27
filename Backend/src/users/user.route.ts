@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   getUsers,
   getUserById,
+  getMe,           // <--- Import the new controller
   updateUser,
   deleteUser,
   updateProfile,
@@ -14,6 +15,28 @@ import {
 } from "../middleware/bearAuth";
 
 export const userRouter: Router = Router();
+
+/**
+ * ================================
+ * PROFILE (SELF)
+ * ================================
+ */
+
+/**
+ * @route   GET /api/users/me
+ * @desc    Get current logged in user details
+ * @access  Private (Any authenticated user)
+ */
+// This MUST be above /:id
+userRouter.get("/me", anyRoleAuth, getMe);
+
+/**
+ * @route   PUT /api/users/profile
+ * @desc    Update own profile
+ * @access  Private (Any authenticated user)
+ */
+userRouter.put("/profile", anyRoleAuth, updateProfile);
+
 
 /**
  * ================================
@@ -35,18 +58,6 @@ userRouter.get("/", officialAuth, getUsers);
  */
 userRouter.get("/:id", officialAuth, getUserById);
 
-/**
- * ================================
- * PROFILE (SELF)
- * ================================
- */
-
-/**
- * @route   PUT /api/users/profile
- * @desc    Update own profile
- * @access  Private (Any authenticated user)
- */
-userRouter.put("/profile", anyRoleAuth, updateProfile);
 
 /**
  * ================================

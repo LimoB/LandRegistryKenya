@@ -28,9 +28,6 @@ interface AuthState {
   authHydrated: boolean;
 }
 
-/* ============================================================
-   INITIAL STATE (NO localStorage)
-============================================================ */
 const initialState: AuthState = {
   user: null,
   token: null,
@@ -49,14 +46,16 @@ const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    // Matches the updated Auth API dispatch: { user, token }
     setCredentials: (
       state,
-      action: PayloadAction<{ token: string; user: User }>
+      action: PayloadAction<{ user: User; token: string }>
     ) => {
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.isAuthenticated = true;
 
+      // Clear any pending states upon successful login
       state.tempEmail = null;
       state.pendingVerification = false;
     },
@@ -74,7 +73,6 @@ const authSlice = createSlice({
       if (state.user) {
         state.user.isVerified = true;
       }
-
       state.pendingVerification = false;
       state.tempEmail = null;
     },
@@ -83,10 +81,20 @@ const authSlice = createSlice({
       state.user = action.payload;
     },
 
+    // Used to manually restore state from persistence layers (e.g., cookies)
+    hydrateAuth: (
+      state,
+      action: PayloadAction<{ user: User; token: string }>
+    ) => {
+      state.user = action.payload.user;
+      state.token = action.payload.token;
+      state.isAuthenticated = !!action.payload.token;
+      state.authHydrated = true;
+    },
+
     logout: (state) => {
       state.user = null;
       state.token = null;
-
       state.tempEmail = null;
       state.pendingVerification = false;
       state.isAuthenticated = false;
@@ -106,6 +114,7 @@ export const {
   setLoginPendingVerification,
   markVerified,
   updateUser,
+  hydrateAuth,
   logout,
   setAuthHydrated,
 } = authSlice.actions;

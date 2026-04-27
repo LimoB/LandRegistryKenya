@@ -52,7 +52,7 @@ transferRouter.get(
  */
 transferRouter.get(
   "/pending",
-  officerAuth,
+  anyRoleAuth, // Changed from officerAuth
   getPending
 );
 

@@ -2,38 +2,40 @@ import { eq, and } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { transferRequests, lands, auditLogs } from "../../drizzle/schema";
 
+/**
+ * Creates a new transfer request initiated by a Buyer (Citizen)
+ */
 export const createTransferRequestService = async (
   buyerId: number,
   landId: number
 ) => {
+  console.log(`[Service] Initiating transfer for Land ID: ${landId} by Buyer: ${buyerId}`);
+
+  // 1. Fetch Land Details
   const land = await db.query.lands.findFirst({
     where: eq(lands.id, landId)
   });
 
-  if (!land) throw new Error("Land not found");
-  if (land.ownerId === buyerId) throw new Error("You already own this land");
-  if (!land.isForSale) throw new Error("Land is not for sale");
-  if (land.verificationStatus !== "verified") throw new Error("Land is not verified");
+  // --- VALIDATION BLOCKS ---
+  if (!land) throw new Error("Land not found in the registry");
+  if (land.ownerId === buyerId) throw new Error("Ownership conflict: You already own this asset.");
+  if (!land.isForSale) throw new Error("This asset is not currently listed for sale.");
+  if (land.verificationStatus !== "verified") throw new Error("Registry Error: Land must be verified before transfer.");
 
-  // Global Check: Is anyone else buying this?
+  // 2. Global Check: Prevent multiple simultaneous transfers for the same plot
   const existingAny = await db.query.transferRequests.findFirst({
     where: and(
       eq(transferRequests.landId, landId),
       eq(transferRequests.status, "pending")
     )
   });
-  if (existingAny) throw new Error("This land already has a pending transfer request");
+  
+  if (existingAny) {
+    console.warn(`[Service] Blocked: Land ${landId} already has a pending request ID: ${existingAny.id}`);
+    throw new Error("This land already has an active pending transfer request.");
+  }
 
-  // Buyer Check: Have you already tried to buy this?
-  const existingBuyer = await db.query.transferRequests.findFirst({
-    where: and(
-      eq(transferRequests.landId, landId),
-      eq(transferRequests.buyerId, buyerId),
-      eq(transferRequests.status, "pending")
-    )
-  });
-  if (existingBuyer) throw new Error("You already have a pending request for this land");
-
+  // 3. Insert the new request
   const [request] = await db
     .insert(transferRequests)
     .values({
@@ -44,12 +46,19 @@ export const createTransferRequestService = async (
     })
     .returning();
 
+  // 4. Audit Log for transparency
   await db.insert(auditLogs).values({
     actionType: "TRANSFER_REQUEST_CREATED",
     performedBy: buyerId,
     landId,
-    metadata: { transferId: request.id }
+    metadata: { 
+      transferId: request.id,
+      buyerId,
+      sellerId: land.ownerId 
+    }
   });
 
+  console.log(`%c[Service Success] Transfer ID ${request.id} created successfully.`, "color: #10b981; font-weight: bold;");
+  
   return request;
 };

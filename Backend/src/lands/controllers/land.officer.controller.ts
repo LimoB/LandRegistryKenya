@@ -24,23 +24,30 @@ export const verifyLand = async (req: Request, res: Response, next: NextFunction
       throw error;
     }
 
-    // 2. Call Service (Blockchain + DB)
+    // 2. Call Service (Blockchain + DB Update)
+    // The service now returns a structured success object { success, message, land }
     const result = await verifyLandService(landId, officerId);
 
-    // 3. Return Success
+    // 3. Return Success (200 OK)
+    // This triggers the success toast on your frontend
     return res.status(200).json(result);
     
   } catch (error: any) {
-    // Determine if it's a blockchain-specific data issue
-    const isBlockchainDataError = 
-      error.message.includes("ENS") || 
+    console.error(`[CONTROLLER ERROR] Land Verification Failed for ID ${landId}:`, error.message);
+
+    // 4. Enhanced Error Classification
+    // Determine if the error is a data conflict (422) or a server crash (500)
+    const isDataConflict = 
+      error.message.includes("already exists") || 
       error.message.includes("address") || 
       error.message.includes("wallet") ||
+      error.message.includes("invalid") ||
       error.message.includes("mint failed");
 
-    if (isBlockchainDataError) {
-      error.statusCode = 422; // Unprocessable Entity
-      error.message = `Blockchain Minting Failed: Check owner's wallet address. Details: ${error.message}`;
+    if (isDataConflict) {
+      error.statusCode = 422; // Unprocessable Entity (Blockchain/Data logic issue)
+    } else {
+      error.statusCode = error.statusCode || 500;
     }
 
     // Pass the error to the globalErrorHandler middleware
@@ -60,7 +67,6 @@ export const getLands = async (_req: Request, res: Response, next: NextFunction)
       data 
     });
   } catch (error: any) {
-    // Pass the error to the globalErrorHandler middleware
     next(error);
   }
 };
