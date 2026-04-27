@@ -9,13 +9,25 @@ import Profile from "../pages/Profile";
 
 export const OfficerRoutes = (
   <>
+    {/* Executive Overview */}
     <Route index element={<Navigate to="dashboard" replace />} />
     <Route path="dashboard" element={<OfficerDashboard />} />
+    
+    {/* Land & Document Verification */}
     <Route path="verify-lands" element={<VerifyLands />} />
-    <Route path="transfers" element={<TransferApprovals />} />
+    
+    {/* Transfer Approval Pipeline */}
+    {/* This is where the officer clicks "Approve" to move state to 'payment_pending' */}
+    <Route path="transfers" element={<TransferApprovals />} /> 
+    
+    {/* Real-time status monitoring for on-chain events */}
     <Route path="transfers/:id" element={<TransferStatus />} /> 
+    
+    {/* Registry Tools */}
     <Route path="search" element={<RegistrySearch />} />
     <Route path="registry/view/:id" element={<OfficerLandDetails />} />
+    
+    {/* Account Management */}
     <Route path="profile" element={<Profile />} />
   </>
 );

@@ -6,45 +6,26 @@ import { ShieldAlert, ArrowLeft } from "lucide-react";
 import TransferTimeline from "./TransferTimeline";
 import TransferSidebar from "./TransferSidebar";
 
-// 1. Define the master interface for the whole component
-export interface Transfer {
-  id: number;
-  status: "pending" | "payment_pending" | "paid" | "completed";
-  createdAt: string;
-  blockchainTxHash?: string;
-  land: {
-    lrNumber: string;
-    priceInKsh: number | string;
-  };
-  seller: {
-    fullName: string;
-  };
-  buyer: {
-    fullName: string;
-    walletAddress: string;
-  };
-}
-
 const TransferStatus: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  // Use the interface in the query hook if your API supports it, 
-  // otherwise we cast the data below.
-  const { data, isLoading, isError, error } = useGetTransferByIdQuery(Number(id));
-  const transfer = data as Transfer;
+  // Removed 'error' from the destructuring since it wasn't being used
+  // The 'transfer' variable is automatically typed by RTK Query
+  const { data: transfer, isLoading, isError } = useGetTransferByIdQuery(Number(id));
 
   // --- CONSOLE LOGS ---
   useEffect(() => {
-    console.log(
-      `%c [Registry] %c Component mounted for Transfer ID: ${id} `,
-      "background: #4f46e5; color: white; border-radius: 3px; font-weight: bold;",
-      "color: #4f46e5; font-weight: bold;"
-    );
+    if (id) {
+      console.log(
+        `%c [Registry] %c Component mounted for Transfer ID: ${id} `,
+        "background: #4f46e5; color: white; border-radius: 3px; font-weight: bold;",
+        "color: #4f46e5; font-weight: bold;"
+      );
+    }
   }, [id]);
 
   if (isLoading) {
-    console.log("%c [Registry] %c Fetching data from distributed ledger...", "color: #64748b;", "color: #94a3b8; font-style: italic;");
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
         <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -54,7 +35,6 @@ const TransferStatus: React.FC = () => {
   }
 
   if (isError || !transfer) {
-    console.error("%c [Registry Error] %c Failed to retrieve record:", "color: white; background: red; padding: 2px 4px;", "", error);
     return (
       <div className="max-w-md mx-auto mt-20 p-8 text-center bg-white rounded-3xl border border-slate-100 shadow-xl">
         <div className="inline-flex p-4 bg-red-50 text-red-600 rounded-full mb-4">
@@ -71,13 +51,6 @@ const TransferStatus: React.FC = () => {
       </div>
     );
   }
-
-  // Final success log
-  console.log(
-    "%c [Registry Success] %c Data synched for LR: " + transfer.land.lrNumber,
-    "background: #22c55e; color: white; border-radius: 3px; font-weight: bold; padding: 2px 4px;",
-    "color: #16a34a; font-weight: bold;"
-  );
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">

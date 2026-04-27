@@ -8,18 +8,15 @@ import { eq } from "drizzle-orm";
 
 dotenv.config();
 
-/* ================================
-   ENV SAFETY CHECK
-================================ */
 const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS;
 
 if (!CONTRACT_ADDRESS) {
   throw new Error("LAND_REGISTRY_ADDRESS is missing in .env");
 }
 
-/* ================================
+/* ============================================================
    CONTRACT INSTANCE
-================================ */
+============================================================ */
 export const landRegistryContract = new ethers.Contract(
   CONTRACT_ADDRESS,
   LandRegistryArtifact.abi,
@@ -30,18 +27,12 @@ export const landRegistryContract = new ethers.Contract(
    IDEMPOTENCY HELPERS
 ============================================================ */
 const checkIdempotency = async (key: string) => {
-  const existing = await db.query.idempotencyKeys.findFirst({
+  return await db.query.idempotencyKeys.findFirst({
     where: eq(idempotencyKeys.key, key)
   });
-
-  return existing;
 };
 
-const saveIdempotency = async (
-  key: string,
-  source: string,
-  txHash: string
-) => {
+const saveIdempotency = async (key: string, source: string, txHash: string) => {
   await db.insert(idempotencyKeys).values({
     key,
     source,
@@ -49,28 +40,26 @@ const saveIdempotency = async (
   });
 };
 
-/* ================================
-   REGISTER LAND ON CHAIN
-================================ */
+/* ============================================================
+   1. REGISTER LAND ON CHAIN
+============================================================ */
 export const registerLandOnChain = async (
   ownerWallet: string,
   lrNumber: string,
   ipfsHash: string
 ) => {
   const idempotencyKey = `register:${lrNumber}`;
-
   const existing = await checkIdempotency(idempotencyKey);
+  
   if (existing) {
-    return {
-      hash: existing.requestHash,
-      reused: true
-    };
+    console.log(`[Blockchain] Returning existing TX for LR: ${lrNumber}`);
+    return { hash: existing.requestHash, reused: true };
   }
 
   try {
-    console.log("Registering land on blockchain");
-    console.log({ ownerWallet, lrNumber, ipfsHash });
+    console.log(`\x1b[34m[Blockchain] Registering Land: ${lrNumber}\x1b[0m`);
 
+    // Call smart contract: function registerInitialLand(address, string, string)
     const tx = await landRegistryContract.registerInitialLand(
       ownerWallet,
       lrNumber,
@@ -78,7 +67,6 @@ export const registerLandOnChain = async (
     );
 
     const receipt = await tx.wait();
-
     await saveIdempotency(idempotencyKey, "blockchain", receipt.hash);
 
     return {
@@ -87,40 +75,44 @@ export const registerLandOnChain = async (
       status: receipt.status
     };
   } catch (error: any) {
-    console.error("Blockchain registration failed:", error?.message || error);
-    throw new Error("Blockchain registration failed");
+    console.error(`\x1b[31m[Blockchain Error]\x1b[0m`, error.reason || error.message);
+    throw new Error(`On-chain registration failed: ${error.reason || "Unknown Error"}`);
   }
 };
 
-/* ================================
-   TRANSFER LAND OWNERSHIP ON CHAIN
-================================ */
+/* ============================================================
+   2. TRANSFER LAND OWNERSHIP ON CHAIN
+============================================================ */
 export const transferLandOnChain = async (
-  landId: number,
+  onChainId: number,
   newOwnerWallet: string,
-  mpesaRef: string
+  paymentRef: string
 ) => {
-  const idempotencyKey = `transfer:${landId}:${newOwnerWallet}`;
-
+  // Key incorporates onChainId and newOwner to prevent duplicate transfer attempts
+  const idempotencyKey = `transfer:${onChainId}:${newOwnerWallet}`;
   const existing = await checkIdempotency(idempotencyKey);
+
   if (existing) {
-    return {
-      hash: existing.requestHash,
-      reused: true
-    };
+    console.log(`[Blockchain] Transfer already exists for Land ID: ${onChainId}`);
+    return { hash: existing.requestHash, reused: true };
   }
 
   try {
-    console.log("Transferring land on blockchain");
-    console.log({ landId, newOwnerWallet, mpesaRef });
+    console.log(`\x1b[35m[Blockchain] Executing Transfer for Land ID: ${onChainId}\x1b[0m`);
 
+    /**
+     * Call smart contract: function transferOwnership(uint256, address, string)
+     * We convert onChainId to BigInt to satisfy Solidity uint256 requirements
+     */
     const tx = await landRegistryContract.transferOwnership(
-      landId,
+      BigInt(onChainId),
       newOwnerWallet,
-      mpesaRef
+      paymentRef // This is either the Stripe PI or M-Pesa Code
     );
 
     const receipt = await tx.wait();
+    
+    if (receipt.status === 0) throw new Error("Transaction reverted on-chain");
 
     await saveIdempotency(idempotencyKey, "blockchain", receipt.hash);
 
@@ -130,7 +122,7 @@ export const transferLandOnChain = async (
       status: receipt.status
     };
   } catch (error: any) {
-    console.error("Blockchain transfer failed:", error?.message || error);
-    throw new Error("Blockchain transfer failed");
+    console.error(`\x1b[31m[Blockchain Transfer Error]\x1b[0m`, error.reason || error.message);
+    throw new Error(`On-chain transfer failed: ${error.reason || "Check wallet balance/permissions"}`);
   }
 };

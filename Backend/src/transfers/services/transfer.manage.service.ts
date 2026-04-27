@@ -1,21 +1,18 @@
-import { eq, and, isNull, or, desc } from "drizzle-orm"; // Added or, desc
+import { eq, and, isNull, or, desc } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { transferRequests, lands, auditLogs, landOwnershipHistory } from "../../drizzle/schema";
 import { transferLandOnChain } from "@/blockchain/blockchain.adapter";
 import { getTransferByIdService } from "./transfer.query.service";
 
 /**
- * Fetch pending transfers with Role-Based filtering
- * Fixes the 403 Forbidden by allowing Citizens to see their own 'pending' deals.
+ * Lists pending transfers with Role-Based filtering.
+ * Fixes 403 by allowing Citizens to see their involved deals.
  */
 export const getPendingTransfersService = async (userId: number, userRole: string) => {
-  // Base condition: The transfer must be in 'pending' status
   const statusCondition = eq(transferRequests.status, "pending");
-
   let finalCondition;
 
   if (userRole === "citizen") {
-    // 🔥 FILTER: Citizen only sees transfers where they are the Buyer OR the Seller
     finalCondition = and(
       statusCondition,
       or(
@@ -24,7 +21,6 @@ export const getPendingTransfersService = async (userId: number, userRole: strin
       )
     );
   } else {
-    // OFFICER: Sees all pending transfers across the registry
     finalCondition = statusCondition;
   }
 
@@ -39,104 +35,155 @@ export const getPendingTransfersService = async (userId: number, userRole: strin
   });
 };
 
+/**
+ * LAND OFFICER: Approves the documentation.
+ * Moves state from 'pending' to 'payment_pending'.
+ */
 export const approveTransferService = async (transferId: number, officerId: number) => {
   const transfer = await getTransferByIdService(transferId);
   if (!transfer || transfer.status !== "pending") throw new Error("Invalid state transition");
 
-  await db.update(transferRequests)
-    .set({ status: "payment_pending" })
-    .where(eq(transferRequests.id, transferId));
+  return await db.transaction(async (tx) => {
+    await tx.update(transferRequests)
+      .set({ status: "payment_pending" })
+      .where(eq(transferRequests.id, transferId));
 
-  await db.insert(auditLogs).values({
-    actionType: "TRANSFER_APPROVED",
-    performedBy: officerId,
-    landId: transfer.landId,
-    metadata: { transferId }
+    await tx.insert(auditLogs).values({
+      actionType: "TRANSFER_APPROVED",
+      performedBy: officerId,
+      landId: transfer.landId,
+      metadata: { transferId }
+    });
+
+    return { message: "Transfer approved and moved to payment stage" };
   });
-
-  return { message: "Transfer approved" };
 };
 
+/**
+ * SYSTEM/WEBHOOK: Marks the transfer as paid.
+ * Can be called by Stripe Webhook or M-Pesa Service.
+ */
 export const markTransferAsPaidService = async (
   transferId: number, 
   paymentMethod: "stripe" | "mpesa", 
   reference?: string
 ) => {
   const transfer = await getTransferByIdService(transferId);
-  if (!transfer || transfer.status !== "payment_pending") throw new Error("Invalid payment state");
+  // Allow transitions from both 'payment_pending' and 'approved' just in case
+  const validStatus = transfer?.status === "payment_pending" || transfer?.status === "approved";
+  
+  if (!transfer || !validStatus) throw new Error("Invalid payment state");
 
-  await db.update(transferRequests)
-    .set({
-      status: "paid",
-      mpesaReceiptCode: paymentMethod === "mpesa" ? reference : undefined
-    })
-    .where(eq(transferRequests.id, transferId));
+  return await db.transaction(async (tx) => {
+    await tx.update(transferRequests)
+      .set({
+        status: "paid",
+        mpesaReceiptCode: paymentMethod === "mpesa" ? reference : undefined,
+        blockchainStatus: "Awaiting Minting"
+      })
+      .where(eq(transferRequests.id, transferId));
 
-  await db.insert(auditLogs).values({
-    actionType: "PAYMENT_CONFIRMED",
-    performedBy: transfer.buyerId,
-    landId: transfer.landId,
-    metadata: { transferId, paymentMethod, reference }
+    await tx.insert(auditLogs).values({
+      actionType: "PAYMENT_CONFIRMED",
+      performedBy: transfer.buyerId,
+      landId: transfer.landId,
+      metadata: { transferId, paymentMethod, reference }
+    });
+
+    return { success: true };
   });
-
-  return { message: "Payment confirmed" };
 };
 
+/**
+ * FINAL STEP: Blockchain Minting and Registry Update.
+ * Triggered by Officer (or automatically) after payment.
+ */
 export const finalizeTransferService = async (transferId: number, officerId: number) => {
   const transfer = await getTransferByIdService(transferId);
-  if (!transfer || transfer.status !== "paid") throw new Error("Transfer not paid yet");
-  if (!transfer.land.onChainId) throw new Error("Land does not have a valid on-chain ID");
+  
+  if (!transfer || transfer.status !== "paid") throw new Error("Transfer must be paid before finalization");
+  if (!transfer.land.onChainId) throw new Error("Land not found on blockchain");
 
-  const tx = await transferLandOnChain(
+  // 1. Blockchain Interaction
+  console.log(`\x1b[35m[Blockchain] Minting transfer for LR: ${transfer.land.lrNumber}...\x1b[0m`);
+  const bcTx = await transferLandOnChain(
     transfer.land.onChainId,
     transfer.buyer.walletAddress,
-    transfer.mpesaReceiptCode || "payment"
+    transfer.mpesaReceiptCode || "STRIPE_PAYMENT"
   );
 
+  // 2. Atomic Database Update
   return await db.transaction(async (trx) => {
-    // Close old ownership
-    await trx.update(landOwnershipHistory).set({ toDate: new Date() })
-      .where(and(eq(landOwnershipHistory.landId, transfer.landId), isNull(landOwnershipHistory.toDate)));
+    // Close previous ownership duration
+    await trx.update(landOwnershipHistory)
+      .set({ toDate: new Date() })
+      .where(and(
+        eq(landOwnershipHistory.landId, transfer.landId), 
+        isNull(landOwnershipHistory.toDate)
+      ));
 
-    // New ownership record
+    // Create New Ownership Record
     await trx.insert(landOwnershipHistory).values({
       landId: transfer.landId,
       fromOwnerId: transfer.sellerId,
-      toOwnerId: transfer.buyerId
+      toOwnerId: transfer.buyerId,
+      fromWallet: transfer.seller.walletAddress,
+      toWallet: transfer.buyer.walletAddress,
+      blockchainTxHash: bcTx.hash,
     });
 
-    // Update Land Table
-    await trx.update(lands).set({ ownerId: transfer.buyerId, isForSale: false, updatedAt: new Date() })
+    // Update Land Table (Owner + Wallet sync)
+    await trx.update(lands)
+      .set({ 
+        ownerId: transfer.buyerId, 
+        currentOwnerWallet: transfer.buyer.walletAddress,
+        isForSale: false,
+        blockchainTxHash: bcTx.hash,
+        updatedAt: new Date() 
+      })
       .where(eq(lands.id, transfer.landId));
 
-    // Complete Request
-    await trx.update(transferRequests).set({ status: "completed", blockchainTxHash: tx.hash })
+    // Complete the Request
+    await trx.update(transferRequests)
+      .set({ 
+        status: "completed", 
+        blockchainTxHash: bcTx.hash,
+        blockchainStatus: "Confirmed" 
+      })
       .where(eq(transferRequests.id, transferId));
 
+    // Final Audit
     await trx.insert(auditLogs).values({
       actionType: "TRANSFER_COMPLETED",
       performedBy: officerId,
       landId: transfer.landId,
-      blockchainTxHash: tx.hash,
-      metadata: { transferId }
+      blockchainTxHash: bcTx.hash,
+      metadata: { transferId, method: "Blockchain_Minting" }
     });
 
-    return { message: "Transfer completed", txHash: tx.hash };
+    return { message: "Transfer completed successfully", txHash: bcTx.hash };
   });
 };
 
+/**
+ * REJECT: Officer rejects the request.
+ */
 export const rejectTransferService = async (transferId: number, officerId: number, reason: string) => {
-  const [updated] = await db.update(transferRequests).set({ status: "rejected" })
-    .where(eq(transferRequests.id, transferId)).returning();
+  return await db.transaction(async (tx) => {
+    const [updated] = await tx.update(transferRequests)
+      .set({ status: "rejected" })
+      .where(eq(transferRequests.id, transferId))
+      .returning();
 
-  if (!updated) throw new Error("Transfer not found");
+    if (!updated) throw new Error("Transfer not found");
 
-  await db.insert(auditLogs).values({
-    actionType: "TRANSFER_REJECTED",
-    performedBy: officerId,
-    landId: updated.landId,
-    metadata: { reason }
+    await tx.insert(auditLogs).values({
+      actionType: "TRANSFER_REJECTED",
+      performedBy: officerId,
+      landId: updated.landId,
+      metadata: { reason, transferId }
+    });
+
+    return { message: "Transfer rejected" };
   });
-
-  return { message: "Transfer rejected" };
 };

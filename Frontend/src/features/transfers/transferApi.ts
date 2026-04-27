@@ -1,19 +1,14 @@
 import { baseApi } from "../../services/baseApi";
 
 /* ============================================================
-   TYPES (MATCHING BACKEND WRAPPER)
+   TYPES
 =========================================================== */
 export interface TransferRequest {
   id: number;
   landId: number;
   buyerId: number;
   sellerId: number;
-  status:
-    | "pending"
-    | "payment_pending"
-    | "paid"
-    | "completed"
-    | "rejected";
+  status: "pending" | "payment_pending" | "paid" | "completed" | "rejected";
   mpesaReceiptCode?: string;
   blockchainTxHash?: string;
   createdAt: string;
@@ -22,7 +17,7 @@ export interface TransferRequest {
     lrNumber: string;
     county?: string;
     onChainId: number;
-    priceInKsh: string;
+    priceInKsh: string | number;
   };
   buyer: {
     id: number;
@@ -42,31 +37,19 @@ interface WrappedResponse<T> {
   data: T;
 }
 
-/* ============================================================
-   PAYLOADS
-============================================================ */
-export interface CreateTransferPayload {
-  landId: number;
-}
-
-export interface RejectTransferPayload {
-  id: number;
-  reason: string;
+export interface PaymentResponse {
+  checkoutUrl?: string;
+  customerMessage?: string;
 }
 
 /* ============================================================
-   API
+   API DEFINITION
 ============================================================ */
 export const transferApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-
-    /* ============================================================
-       INITIATE TRANSFER
-    ============================================================ */
-    createTransfer: builder.mutation<
-      WrappedResponse<TransferRequest>,
-      CreateTransferPayload
-    >({
+    
+    // 1. INITIATE
+    createTransfer: builder.mutation<WrappedResponse<TransferRequest>, { landId: number }>({
       query: (body) => ({
         url: "/transfers/initiate",
         method: "POST",
@@ -75,57 +58,34 @@ export const transferApi = baseApi.injectEndpoints({
       invalidatesTags: [{ type: "Transfer", id: "LIST" }],
     }),
 
-    /* ============================================================
-       GET ALL MY TRANSFERS (HISTORY)
-       Use this for the "My Transactions" dashboard
-    ============================================================ */
+    // 2. HISTORY
     getMyTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/my-requests",
-      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
+      transformResponse: (res: WrappedResponse<TransferRequest[]>) => res.data,
       providesTags: (result) =>
-        result
-          ? [
-              ...result.map((t) => ({
-                type: "Transfer" as const,
-                id: t.id,
-              })),
-              { type: "Transfer", id: "LIST" },
-            ]
+        result 
+          ? [...result.map((t) => ({ type: "Transfer" as const, id: t.id })), { type: "Transfer", id: "LIST" }]
           : [{ type: "Transfer", id: "LIST" }],
     }),
 
-    /* ============================================================
-       GET PENDING TRANSFERS (OFFICER)
-    ============================================================ */
+    // 3. OFFICER QUEUE
     getPendingTransfers: builder.query<TransferRequest[], void>({
       query: () => "/transfers/pending",
-      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
+      transformResponse: (res: WrappedResponse<TransferRequest[]>) => res.data,
       providesTags: (result) =>
-        result
-          ? [
-              ...result.map((t) => ({
-                type: "Transfer" as const,
-                id: t.id,
-              })),
-              { type: "Transfer", id: "LIST" },
-            ]
+        result 
+          ? [...result.map((t) => ({ type: "Transfer" as const, id: t.id })), { type: "Transfer", id: "LIST" }]
           : [{ type: "Transfer", id: "LIST" }],
     }),
 
-    /* ============================================================
-       GET SINGLE TRANSFER
-    ============================================================ */
+    // 4. SINGLE RECORD
     getTransferById: builder.query<TransferRequest, number>({
       query: (id) => `/transfers/${id}`,
-      transformResponse: (response: WrappedResponse<TransferRequest>) => response.data,
-      providesTags: (_result, _error, id) => [
-        { type: "Transfer", id },
-      ],
+      transformResponse: (res: WrappedResponse<TransferRequest>) => res.data,
+      providesTags: (_result, _error, id) => [{ type: "Transfer", id }],
     }),
 
-    /* ============================================================
-       APPROVE TRANSFER (OFFICER)
-    ============================================================ */
+    // 5. OFFICER APPROVAL
     approveTransfer: builder.mutation<WrappedResponse<null>, number>({
       query: (id) => ({
         url: `/transfers/approve/${id}`,
@@ -134,77 +94,63 @@ export const transferApi = baseApi.injectEndpoints({
       invalidatesTags: (_result, _error, id) => [
         { type: "Transfer", id },
         { type: "Transfer", id: "LIST" },
-        { type: "Land", id: "LIST" },
       ],
     }),
 
-    /* ============================================================
-       REJECT TRANSFER (OFFICER)
-    ============================================================ */
-    rejectTransfer: builder.mutation<
-      WrappedResponse<null>,
-      RejectTransferPayload
-    >({
+    // 6. OFFICER REJECTION
+    rejectTransfer: builder.mutation<WrappedResponse<null>, { id: number; reason: string }>({
       query: ({ id, reason }) => ({
         url: `/transfers/reject/${id}`,
         method: "PATCH",
         body: { reason },
       }),
-      invalidatesTags: (_result, _error, arg) => [
-        { type: "Transfer", id: arg.id },
-        { type: "Transfer", id: "LIST" },
-      ],
+      invalidatesTags: (_result, _error, arg) => [{ type: "Transfer", id: arg.id }, { type: "Transfer", id: "LIST" }],
     }),
 
-    /* ============================================================
-       FINALIZE TRANSFER (BLOCKCHAIN)
-    ============================================================ */
-    finalizeTransfer: builder.mutation<
-      WrappedResponse<{ txHash: string }>,
-      number
-    >({
+    // 7. PAYMENT (CITIZEN)
+    payTransfer: builder.mutation<WrappedResponse<PaymentResponse>, number>({
+      query: (id) => ({
+        url: `/transfers/pay/${id}`,
+        method: "POST",
+      }),
+      invalidatesTags: (_result, _error, id) => [{ type: "Transfer", id }],
+    }),
+
+    // 8. BLOCKCHAIN FINALIZE
+    finalizeTransfer: builder.mutation<WrappedResponse<{ txHash: string }>, number>({
       query: (id) => ({
         url: `/transfers/finalize/${id}`,
         method: "PATCH",
       }),
       invalidatesTags: (_result, _error, id) => [
         { type: "Transfer", id },
-        { type: "Transfer", id: "LIST" },
         { type: "Land", id: "LIST" },
       ],
     }),
 
-    /* ============================================================
-       GET MY SALES
-    ============================================================ */
+    // 9. SALES DASHBOARD
     getMySales: builder.query<TransferRequest[], void>({
       query: () => "/transfers/my-sales",
-      transformResponse: (response: WrappedResponse<TransferRequest[]>) => response.data,
+      transformResponse: (res: WrappedResponse<TransferRequest[]>) => res.data,
       providesTags: (result) =>
-        result
-          ? [
-              ...result.map((t) => ({
-                type: "Transfer" as const,
-                id: t.id,
-              })),
-              { type: "Transfer", id: "LIST" },
-            ]
+        result 
+          ? [...result.map((t) => ({ type: "Transfer" as const, id: t.id })), { type: "Transfer", id: "LIST" }]
           : [{ type: "Transfer", id: "LIST" }],
     }),
-
   }),
 });
 
-/* ================================
-   HOOKS
-================================ */
+/* ============================================================
+   EXPORT HOOKS
+============================================================ */
 export const {
   useCreateTransferMutation,
-  useGetMyTransfersQuery, // New hook to use in MyRequests.tsx
+  useGetMyTransfersQuery,
   useGetPendingTransfersQuery,
   useGetTransferByIdQuery,
   useApproveTransferMutation,
   useRejectTransferMutation,
+  usePayTransferMutation,
   useFinalizeTransferMutation,
   useGetMySalesQuery,
 } = transferApi;

@@ -1,62 +1,61 @@
 import express, { type Router as ExpressRouter } from "express";
-
 import {
   recordMpesaPayment,
   getPaymentByTransfer,
   getPayments,
   createCheckoutSession,
 } from "./payment.controller";
-
-import { handleStripeWebhook } from "./webhook.controller";
+import { handleStripeWebhook } from "./payment.controller"; // Assuming it's in the same controller now
 import { anyRoleAuth, adminAuth } from "../middleware/bearAuth";
 
-/* ================================
-   ROUTER
-================================ */
 export const paymentRouter: ExpressRouter = express.Router();
 
-/* ================================
-   M-PESA PAYMENT
-================================ */
+/**
+ * STRIPE WEBHOOK (CRITICAL)
+ * This must receive the RAW body for signature verification.
+ * It is placed at the top and uses express.raw.
+ */
 paymentRouter.post(
-  "/mpesa",
-  anyRoleAuth,
-  recordMpesaPayment
+  "/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook
 );
 
-/* ================================
-   GET PAYMENT BY TRANSFER
-================================ */
-paymentRouter.get(
-  "/transfer/:transferId",
-  anyRoleAuth,
-  getPaymentByTransfer
-);
-
-/* ================================
-   GET ALL PAYMENTS (ADMIN ONLY)
-================================ */
-paymentRouter.get(
-  "/",
-  adminAuth,
-  getPayments
-);
-
-/* ================================
-   STRIPE CHECKOUT SESSION
-================================ */
+/**
+ * STRIPE CHECKOUT
+ * Creates the session and returns the Stripe URL to the frontend
+ */
 paymentRouter.post(
   "/stripe/checkout",
   anyRoleAuth,
   createCheckoutSession
 );
 
-/* ================================
-   STRIPE WEBHOOK (RAW BODY REQUIRED)
-    MUST be mounted before express.json() globally
-================================ */
+/**
+ * M-PESA PAYMENT
+ * Manual recording of M-Pesa transaction codes
+ */
 paymentRouter.post(
-  "/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  handleStripeWebhook
+  "/mpesa",
+  anyRoleAuth,
+  recordMpesaPayment
+);
+
+/**
+ * GET PAYMENT BY TRANSFER ID
+ */
+paymentRouter.get(
+  "/transfer/:transferId",
+  anyRoleAuth,
+  getPaymentByTransfer
+);
+
+/**
+ * GET ALL PAYMENTS
+ * Admin-only overview of all transactions
+ */
+paymentRouter.get(
+  "/",
+  adminAuth,
+  getPayments
 );

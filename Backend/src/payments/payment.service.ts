@@ -2,207 +2,146 @@ import db from "../drizzle/db";
 import { payments, transferRequests } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { stripe } from "../utils/stripe";
+import { finalizeTransferService } from "../transfers/services/transfer.manage.service";
 
 /* ============================================================
-   TYPES (local safety instead of any)
+   1. CREATE STRIPE CHECKOUT SESSION
 ============================================================ */
-type PaymentMethod = "stripe" | "mpesa";
-type PaymentStatus = "pending" | "completed" | "failed";
+export const createStripeCheckoutService = async (transferId: number) => {
+  console.log(`\x1b[36m[Service] Initiating Stripe Session for Transfer: ${transferId}\x1b[0m`);
 
-/* ============================================================
-   CREATE STRIPE PAYMENT RECORD (internal helper)
-============================================================ */
-export const createStripePaymentRecord = async (
-  transferId: number,
-  amount: string,
-  sessionId: string
-) => {
   const transfer = await db.query.transferRequests.findFirst({
     where: eq(transferRequests.id, transferId),
+    with: { land: true },
   });
 
-  if (!transfer) throw new Error("Transfer not found");
+  if (!transfer || !transfer.land) throw new Error("Transfer record or land details not found");
 
-  const [payment] = await db
-    .insert(payments)
-    .values({
-      transferRequestId: transferId,
-      amount,
-      paymentMethod: "stripe",
-      paymentStatus: "pending",
-      stripeSessionId: sessionId,
-    })
-    .returning();
+  const validStatuses = ["approved", "payment_pending"];
+  if (!validStatuses.includes(transfer.status)) {
+    throw new Error(`Transfer status is '${transfer.status}'. Only approved transfers can be paid.`);
+  }
 
-  return payment;
+  const amountKsh = Number(transfer.land.priceInKsh);
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    mode: "payment",
+    line_items: [{
+      price_data: {
+        currency: "kes",
+        product_data: {
+          name: `Land Transfer: ${transfer.land.lrNumber}`,
+          description: `Statutory Fees for Title Transfer of LR No. ${transfer.land.lrNumber}`,
+        },
+        unit_amount: Math.round(amountKsh * 100), 
+      },
+      quantity: 1,
+    }],
+    metadata: { transferId: String(transfer.id) },
+    success_url: `${process.env.CLIENT_URL}/citizen/transfer/status/${transfer.id}?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.CLIENT_URL}/citizen/transfer/status/${transfer.id}`,
+  });
+
+  await db.insert(payments).values({
+    transferRequestId: transfer.id,
+    landId: transfer.landId,
+    amount: amountKsh.toString(),
+    paymentMethod: "stripe",
+    paymentStatus: "pending",
+    stripeSessionId: session.id,
+  }).onConflictDoUpdate({
+    target: [payments.stripeSessionId],
+    set: { updatedAt: new Date() }
+  });
+
+  return { url: session.url, sessionId: session.id };
 };
 
 /* ============================================================
-   CONFIRM STRIPE PAYMENT (Webhook-safe)
+   2. CONFIRM STRIPE PAYMENT (The "Auto-Mint" Trigger)
 ============================================================ */
-export const confirmStripePaymentService = async (
-  sessionId: string,
-  paymentIntentId: string
-) => {
-  const payment = await db.query.payments.findFirst({
-    where: eq(payments.stripeSessionId, sessionId),
+export const confirmStripePaymentService = async (sessionId: string, paymentIntentId: string) => {
+  return await db.transaction(async (tx) => {
+    const payment = await tx.query.payments.findFirst({
+      where: eq(payments.stripeSessionId, sessionId),
+    });
+
+    if (!payment) throw new Error("Payment record not found");
+    if (payment.paymentStatus === "completed") return payment;
+
+    await tx.update(payments)
+      .set({
+        paymentStatus: "completed",
+        stripePaymentIntentId: paymentIntentId,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.id, payment.id));
+
+    await tx.update(transferRequests)
+      .set({ status: "paid" })
+      .where(eq(transferRequests.id, payment.transferRequestId));
+
+    console.log(`\x1b[32m[Payment Success]\x1b[0m Transfer ${payment.transferRequestId} marked as PAID.`);
+
+    try {
+      // Automating the final registry update and blockchain minting
+      await finalizeTransferService(payment.transferRequestId, 1); 
+      console.log(`\x1b[35m[Automation]\x1b[0m Ownership handed over successfully via Blockchain.`);
+    } catch (err) {
+      console.error(`\x1b[31m[Automation Error]\x1b[0m Payment succeeded but Blockchain minting failed:`, err);
+    }
   });
-
-  if (!payment) throw new Error("Payment not found");
-
-  const [updated] = await db
-    .update(payments)
-    .set({
-      paymentStatus: "completed",
-      stripePaymentIntentId: paymentIntentId,
-      updatedAt: new Date(),
-    })
-    .where(eq(payments.id, payment.id))
-    .returning();
-
-  await db
-    .update(transferRequests)
-    .set({
-      status: "paid",
-    })
-    .where(eq(transferRequests.id, payment.transferRequestId));
-
-  return updated;
 };
 
 /* ============================================================
-   M-PESA PAYMENT (CLEAN VERSION)
+   3. M-PESA RECORDING
 ============================================================ */
-export const createMpesaPaymentService = async (
-  transferId: number,
-  amount: string,
-  mpesaCode: string
-) => {
-  const transfer = await db.query.transferRequests.findFirst({
-    where: eq(transferRequests.id, transferId),
-  });
-
-  if (!transfer) throw new Error("Transfer not found");
-
-  const [payment] = await db
-    .insert(payments)
-    .values({
+export const createMpesaPaymentService = async (transferId: number, amount: string, mpesaCode: string) => {
+  return await db.transaction(async (tx) => {
+    const [payment] = await tx.insert(payments).values({
       transferRequestId: transferId,
       amount,
       paymentMethod: "mpesa",
       paymentStatus: "completed",
       mpesaReceiptCode: mpesaCode,
-    })
-    .returning();
+    }).returning();
 
-  await db
-    .update(transferRequests)
-    .set({
-      status: "paid",
-      mpesaReceiptCode: mpesaCode,
-    })
-    .where(eq(transferRequests.id, transferId));
-
-  return payment;
+    await tx.update(transferRequests)
+      .set({ status: "paid" })
+      .where(eq(transferRequests.id, transferId));
+    
+    return payment;
+  });
 };
 
 /* ============================================================
-   GET PAYMENT BY TRANSFER
+   4. QUERY SERVICES (Fixes TS2304)
 ============================================================ */
+
+/**
+ * Fetches the payment status for a specific transfer request
+ */
 export const getPaymentByTransferService = async (transferId: number) => {
   return await db.query.payments.findFirst({
     where: eq(payments.transferRequestId, transferId),
   });
 };
 
-/* ============================================================
-   GET ALL PAYMENTS
-============================================================ */
+/**
+ * Fetches all payments for the admin audit dashboard
+ */
 export const getAllPaymentsService = async () => {
   return await db.query.payments.findMany({
     with: {
-      transferRequest: true,
+      transferRequest: {
+        with: {
+          land: true,
+          buyer: true,
+          seller: true
+        }
+      }
     },
+    orderBy: (payments, { desc }) => [desc(payments.createdAt)]
   });
-};
-
-/* ============================================================
-   CREATE STRIPE CHECKOUT SESSION (MAIN FLOW)
-============================================================ */
-export const createStripeCheckoutService = async (transferId: number) => {
-  const transfer = await db.query.transferRequests.findFirst({
-    where: eq(transferRequests.id, transferId),
-    with: {
-      land: true,
-      buyer: true,
-    },
-  });
-
-  if (!transfer) throw new Error("Transfer not found");
-
-  if (transfer.status !== "approved") {
-    throw new Error("Transfer not ready for payment");
-  }
-
-  const amount = Number(transfer.land.priceInKsh);
-
-  if (Number.isNaN(amount) || amount <= 0) {
-    throw new Error("Land has invalid price");
-  }
-
-  /* ================================
-     CREATE STRIPE SESSION
-  ================================= */
-  const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    mode: "payment",
-
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: `Land Transfer - ${transfer.land.lrNumber}`,
-          },
-          unit_amount: Math.round(amount * 100),
-        },
-        quantity: 1,
-      },
-    ],
-
-    metadata: {
-      transferId: String(transfer.id),
-      buyerId: String(transfer.buyerId),
-      landId: String(transfer.landId),
-    },
-
-    success_url: `${process.env.FRONTEND_URL}/payment/success`,
-    cancel_url: `${process.env.FRONTEND_URL}/payment/cancel`,
-  });
-
-  /* ================================
-     CREATE PAYMENT RECORD
-  ================================= */
-  await db.insert(payments).values({
-    transferRequestId: transfer.id,
-    amount: amount.toString(),
-    paymentMethod: "stripe",
-    paymentStatus: "pending",
-    stripeSessionId: session.id,
-  });
-
-  /* ================================
-     UPDATE TRANSFER STATUS
-  ================================= */
-  await db
-    .update(transferRequests)
-    .set({
-      status: "payment_pending",
-    })
-    .where(eq(transferRequests.id, transfer.id));
-
-  return {
-    url: session.url,
-    sessionId: session.id,
-  };
 };
