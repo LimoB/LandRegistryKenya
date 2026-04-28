@@ -18,7 +18,7 @@ import {
   FileSearch,
   CheckSquare,
   Globe,
-  Wallet,
+  // Wallet,
   History,
   UserCircle,
   Activity,
@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         { name: "Payment History", path: "/citizen/payments", icon: History },
       ],
       finance: [
-        { name: "On-Chain Wallet", path: "/citizen/wallet", icon: Wallet },
+        // { name: "On-Chain Wallet", path: "/citizen/wallet", icon: Wallet },
         { name: "Pay Statutory Fees", path: "/citizen/pay", icon: CreditCard, comingSoon: true },
       ],
     },

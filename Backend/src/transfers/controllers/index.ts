@@ -1,13 +1,15 @@
 /**
  * Transfer Controllers Barrel File
- * Exporting all modular controllers from a single entry point
  */
 
-// 1. Buyer actions (Initiation)
+// 1. Buyer actions
 export * from "./transfer.buyer.controller";
 
-// 2. Officer actions (Approval, Rejection, Finalization)
+// 2. Officer actions
 export * from "./transfer.officer.controller";
 
-// 3. Information & Lookups (Listings, History, IDs)
+// 3. Info & lookups
 export * from "./transfer.info.controller";
+
+// 4. 🔁 Blockchain actions (NEW)
+export * from "./transfer.blockchain.controller";

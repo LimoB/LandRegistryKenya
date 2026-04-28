@@ -4,58 +4,63 @@ import {
   getPaymentByTransfer,
   getPayments,
   createCheckoutSession,
+  handleStripeWebhook
 } from "./payment.controller";
-import { handleStripeWebhook } from "./payment.controller"; // Assuming it's in the same controller now
-import { anyRoleAuth, adminAuth } from "../middleware/bearAuth";
+
+import { anyRoleAuth } from "../middleware/bearAuth";
 
 export const paymentRouter: ExpressRouter = express.Router();
 
-/**
- * STRIPE WEBHOOK (CRITICAL)
- * This must receive the RAW body for signature verification.
- * It is placed at the top and uses express.raw.
- */
+/* ============================================================
+   1. STRIPE WEBHOOK (PUBLIC)
+   - Uses raw body for Stripe signature verification
+   - MUST NOT pass through express.json()
+============================================================ */
 paymentRouter.post(
   "/stripe/webhook",
   express.raw({ type: "application/json" }),
   handleStripeWebhook
 );
 
-/**
- * STRIPE CHECKOUT
- * Creates the session and returns the Stripe URL to the frontend
- */
+/* ============================================================
+   2. STRIPE CHECKOUT SESSION
+   - Authenticated users (citizen, officer, admin)
+============================================================ */
 paymentRouter.post(
   "/stripe/checkout",
   anyRoleAuth,
   createCheckoutSession
 );
 
-/**
- * M-PESA PAYMENT
- * Manual recording of M-Pesa transaction codes
- */
+/* ============================================================
+   3. M-PESA PAYMENT
+   - Authenticated users
+============================================================ */
 paymentRouter.post(
   "/mpesa",
   anyRoleAuth,
   recordMpesaPayment
 );
 
-/**
- * GET PAYMENT BY TRANSFER ID
- */
+/* ============================================================
+   4. GET PAYMENT BY TRANSFER
+   - Authenticated users
+============================================================ */
 paymentRouter.get(
   "/transfer/:transferId",
   anyRoleAuth,
   getPaymentByTransfer
 );
 
-/**
- * GET ALL PAYMENTS
- * Admin-only overview of all transactions
- */
+/* ============================================================
+   5. GET PAYMENTS (ROLE-BASED ACCESS)
+   - Admin → all payments
+   - Land Officer → all payments
+   - Citizen → only their payments
+   - Filtering handled in controller
+============================================================ */
 paymentRouter.get(
   "/",
-  adminAuth,
+  anyRoleAuth,
   getPayments
 );

@@ -1,56 +1,94 @@
 import { Request, Response, NextFunction } from "express";
-import { createTransferRequestService } from "../services/index";
+import { createTransferRequestService } from "../services";
 import { getUserId } from "../../utils/auth.util";
 
 /**
  * Initiates a land ownership transfer request
  */
-export const initiateTransfer = async (req: Request, res: Response, next: NextFunction) => {
-  const traceId = Math.random().toString(36).substring(7);
+export const initiateTransfer = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const traceId = `TX-${Math.random().toString(36).substring(2, 8)}`;
+
   try {
     const buyerId = getUserId(req);
     const { landId } = req.body;
 
-    console.log(`%c[Request] %cInitiate Transfer (Trace: ${traceId})`, "color: #a855f7; font-weight: bold;", "color: #94a3b8;");
-    console.log(`[Data] Buyer ID: ${buyerId} | Land ID: ${landId}`);
+    console.log(`\n\x1b[35m========== INITIATE TRANSFER ==========\x1b[0m`);
+    console.log(`\x1b[36m[Trace]\x1b[0m ${traceId}`);
+    console.log(`\x1b[36m[Request]\x1b[0m Buyer ID: ${buyerId}`);
+    console.log(`\x1b[36m[Request]\x1b[0m Land ID: ${landId}`);
 
-    // 1. Authorization Check
+    /* ============================
+       1. AUTH CHECK
+    ============================ */
     if (!buyerId) {
-      console.warn(`%c[Auth] %cFailed to identify buyer for trace: ${traceId}`, "color: #f59e0b; font-weight: bold;", "color: #fca5a5;");
+      console.warn(`\x1b[33m[Auth Warning]\x1b[0m No buyer found (Trace: ${traceId})`);
       const error: any = new Error("Unauthorized: Buyer identification failed.");
       error.statusCode = 401;
       throw error;
     }
 
-    // 2. Input Validation
+    /* ============================
+       2. INPUT VALIDATION
+    ============================ */
     if (!landId) {
-      console.warn(`%c[Validation] %cMissing landId in request body.`, "color: #f59e0b; font-weight: bold;", "color: #fca5a5;");
+      console.warn(`\x1b[33m[Validation Warning]\x1b[0m landId missing`);
       const error: any = new Error("landId is required to initiate a transfer.");
       error.statusCode = 400;
       throw error;
     }
 
-    // 3. Service Call
+    const parsedLandId = Number(landId);
+
+    if (isNaN(parsedLandId)) {
+      console.warn(`\x1b[33m[Validation Warning]\x1b[0m Invalid landId format`);
+      const error: any = new Error("landId must be a valid number.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    console.log(`\x1b[34m[Service Call]\x1b[0m Creating transfer request...`);
+
+    /* ============================
+       3. SERVICE CALL
+    ============================ */
     const request = await createTransferRequestService(
       buyerId,
-      Number(landId)
+      parsedLandId
     );
 
-    console.log(`%c[Success] %cTransfer Request ${request.id} created successfully.`, "color: #10b981; font-weight: bold;", "color: #34d399;");
+    console.log(`\x1b[32m[Success]\x1b[0m Transfer Request Created`);
+    console.log(`\x1b[32m[Data]\x1b[0m Request ID: ${request.id}`);
+    console.log(`\x1b[32m[Data]\x1b[0m Status: ${request.status}`);
+    console.log(`\x1b[32m=======================================\x1b[0m\n`);
 
-    // 4. Success Response
+    /* ============================
+       4. RESPONSE
+    ============================ */
     return res.status(201).json({
       success: true,
       message: "Transfer request initiated successfully",
-      data: request
+      data: request,
+      traceId // 👈 useful for debugging frontend ↔ backend
     });
 
   } catch (error: any) {
-    console.error(`%c[Error] %cinitiateTransfer failed (Trace: ${traceId}):`, "color: #ef4444; font-weight: bold;", "color: #f87171;", error.message);
-    
-    // Ensure we don't send a 500 for logic errors (like "land already sold")
+    console.error(`\n\x1b[31m[ERROR]\x1b[0m Initiate Transfer Failed`);
+    console.error(`\x1b[31m[Trace]\x1b[0m ${traceId}`);
+    console.error(`\x1b[31m[Message]\x1b[0m ${error.message}`);
+
+    if (error.stack) {
+      console.error(`\x1b[31m[Stack]\x1b[0m ${error.stack}`);
+    }
+
+    console.error(`\x1b[31m=======================================\x1b[0m\n`);
+
+    // Default to 400 for logical errors
     if (!error.statusCode) error.statusCode = 400;
-    
+
     next(error);
   }
 };

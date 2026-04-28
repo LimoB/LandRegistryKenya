@@ -7,13 +7,15 @@ import {
   getMySales,
   getMyTransfers,
   finalizeTransfer,
-  getTransferById
+  getTransferById,
+  retryBlockchainTransfer //  ADD THIS
 } from "./controllers/index";
 
 import {
   citizenAuth,
   officerAuth,
-  anyRoleAuth
+  anyRoleAuth,
+  adminAuth
 } from "../middleware/bearAuth";
 
 import { idempotencyMiddleware } from "../idempotency/idempotency.middleware";
@@ -24,30 +26,19 @@ export const transferRouter: Router = Router();
    CITIZEN (BUY / SELL FLOW)
 ============================================================ */
 
-/**
- * Create transfer request (BUY request)
- * Idempotent: prevents duplicate buy requests
- */
 transferRouter.post(
-  "/initiate",
+  "/",
   citizenAuth,
   idempotencyMiddleware,
   initiateTransfer
 );
 
-/**
- * View full transaction history (Purchases & Sales)
- * MUST be defined before /:id to avoid "my-requests" being treated as an ID
- */
 transferRouter.get(
   "/my-requests",
   citizenAuth,
   getMyTransfers
 );
 
-/**
- * View seller's transfers (sales history)
- */
 transferRouter.get(
   "/my-sales",
   citizenAuth,
@@ -55,56 +46,55 @@ transferRouter.get(
 );
 
 /* ============================================================
-   OFFICER ACTIONS (APPROVAL FLOW)
+   OFFICER / SYSTEM ACTIONS
 ============================================================ */
 
-/**
- * View pending transfers
- */
 transferRouter.get(
   "/pending",
   anyRoleAuth,
   getPending
 );
 
-/**
- * Approve transfer (moves to payment_pending state)
- */
 transferRouter.patch(
-  "/approve/:id",
+  "/:id/approve",
   officerAuth,
   idempotencyMiddleware,
   approveTransfer
 );
 
-/**
- * Reject transfer
- */
 transferRouter.patch(
-  "/reject/:id",
+  "/:id/reject",
   officerAuth,
   idempotencyMiddleware,
   rejectTransfer
 );
 
-/**
- * Finalize transfer (after payment confirmed via webhook)
- */
+/* ============================================================
+   🔁 NEW: RETRY BLOCKCHAIN
+============================================================ */
+
+transferRouter.post(
+  "/:id/retry-blockchain",
+  anyRoleAuth, // or restrict to buyer/admin if you want
+  idempotencyMiddleware,
+  retryBlockchainTransfer
+);
+
+/* ============================================================
+   ⚠️ ADMIN FALLBACK
+============================================================ */
+
 transferRouter.patch(
-  "/finalize/:id",
-  officerAuth,
+  "/:id/finalize",
+  adminAuth,
   idempotencyMiddleware,
   finalizeTransfer
 );
 
 /* ============================================================
-   GENERAL AUTH USERS
+   GENERAL ACCESS
 ============================================================ */
 
-/**
- * Get transfer by ID (buyer/seller/officer)
- * THIS MUST REMAIN AT THE BOTTOM OF THE FILE
- */
 transferRouter.get(
   "/:id",
   anyRoleAuth,

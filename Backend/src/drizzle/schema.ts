@@ -91,6 +91,8 @@ export const blockchainEvents = pgTable("blockchain_events", {
   txHash: varchar("tx_hash", { length: 255 }).unique().notNull(),
 
   blockNumber: integer("block_number"),
+    logIndex: integer("log_index").notNull(),
+
 
   processed: boolean("processed").default(false),
 
@@ -201,7 +203,6 @@ export const landOwnershipHistory = pgTable("land_ownership_history", {
 });
 
 /* ================= TRANSFER REQUESTS ================= */
-
 export const transferRequests = pgTable("transfer_requests", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
 
@@ -217,17 +218,31 @@ export const transferRequests = pgTable("transfer_requests", {
     .references(() => users.id)
     .notNull(),
 
-  status: requestStatusEnum("status").default("pending").notNull(),
+  // ================= STATUS =================
+  status: requestStatusEnum("status")
+    .default("pending")
+    .notNull(),
 
   blockchainStatus: varchar("blockchain_status", { length: 50 }),
 
-  mpesaReceiptCode: varchar("mpesa_receipt", { length: 20 }),
+  // ================= PAYMENT =================
+  mpesaReceiptCode: varchar("mpesa_receipt", { length: 50 }),
 
+  // ================= BLOCKCHAIN =================
   blockchainTxHash: varchar("tx_hash", { length: 100 }),
 
-  createdAt: timestamp("created_at").defaultNow()
-});
+  // ================= RETRY SYSTEM (🔥 NEW) =================
+  retryCount: integer("retry_count")
+    .default(0)
+    .notNull(),
 
+  lastRetryAt: timestamp("last_retry_at"),
+
+  // ================= TIMESTAMPS =================
+  createdAt: timestamp("created_at").defaultNow(),
+
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
 /* ================= PAYMENTS ================= */
 
 export const payments = pgTable("payments", {

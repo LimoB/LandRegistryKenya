@@ -6,9 +6,9 @@ import CitizenLandDetails from "../pages/citizen/LandDetails";
 import TransferLand from "../pages/citizen/TransferLand";
 import MyRequests from "../pages/citizen/MyRequests";
 import TransferStatus from "../pages/citizen/TransferStatus";
-import PaymentHistory from "../pages/Payments"; // Replaced ComingSoon
-import CitizenWallet from "../pages/citizen/CitizenWallet";     // Replaced ComingSoon
-import DigitalTitles from "../pages/citizen/DigitalTitles";     // Added for final ownership view
+import PaymentHistory from "../pages/Payments"; 
+import CitizenWallet from "../pages/citizen/CitizenWallet";     
+import DigitalTitles from "../pages/citizen/DigitalTitles";     
 import Profile from "../pages/Profile";
 
 export const CitizenRoutes = (
@@ -20,7 +20,13 @@ export const CitizenRoutes = (
     {/* Property Management */}
     <Route path="my-lands" element={<MyLands />} />
     <Route path="register-land" element={<RegisterLand />} />
-    <Route path="lands/:id" element={<CitizenLandDetails />} />
+    
+    {/** * FIXED: Changed from 'lands/:id' to 'lands/*' 
+     * This allows the 'lrNumber' (e.g., NA/LIM/9000) to be captured 
+     * as a single string parameter despite the slashes.
+     */}
+    <Route path="lands/*" element={<CitizenLandDetails />} />
+    
     <Route path="titles" element={<DigitalTitles />} />
     
     {/* Transfer & Marketplace Flow */}

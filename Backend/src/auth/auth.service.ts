@@ -66,7 +66,6 @@ export const loginService = async (
 ) => {
   const normalizedEmail = email.toLowerCase().trim();
 
-  // 1. Fetch User
   const user = await db.query.users.findFirst({
     where: eq(users.email, normalizedEmail),
   });
@@ -75,28 +74,33 @@ export const loginService = async (
     throw new Error("Invalid credentials");
   }
 
-  // 2. Verify Password
   const isMatch = await bcrypt.compare(passwordAttempt, user.password);
   if (!isMatch) {
     throw new Error("Invalid credentials");
   }
 
-  // NOTE: We do NOT throw an "Account not verified" error here.
-  // We return the user so the Controller can decide how to handle the 403 response.
-  // This prevents the global error handler from catching it as a 500 error.
+  console.log("\n========== [LOGIN DEBUG] ==========");
+  console.log("User:", user);
+  console.log("Role:", user.role);
+  console.log("==================================\n");
 
-  // 3. Generate JWT
+  const VALID_ROLES = ["admin", "land_officer", "citizen"] as const;
+
+  if (!VALID_ROLES.includes(user.role as any)) {
+    console.error("[LOGIN ERROR] Invalid role in DB:", user.role);
+    throw new Error(`Invalid user role: ${user.role}`);
+  }
+
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    console.error("CRITICAL: JWT_SECRET is missing in .env file");
-    throw new Error("Internal server configuration error");
+    throw new Error("Missing JWT_SECRET");
   }
 
   const token = jwt.sign(
     {
       userId: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role, // now guaranteed valid
       walletAddress: user.walletAddress,
     },
     secret,

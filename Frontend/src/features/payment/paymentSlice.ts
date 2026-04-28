@@ -1,18 +1,13 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Payment } from "./paymentApi";
 
 /* ============================================================
-   STATE (UI ONLY)
+   STATE (UI ONLY - MINIMAL)
 ============================================================ */
 interface PaymentState {
-  selectedPayment: Payment | null;
-  lastStripeSessionId: string | null;
   isStripeRedirecting: boolean;
 }
 
 const initialState: PaymentState = {
-  selectedPayment: null,
-  lastStripeSessionId: null,
   isStripeRedirecting: false,
 };
 
@@ -23,29 +18,6 @@ const paymentSlice = createSlice({
   name: "payment",
   initialState,
   reducers: {
-    /* ======================
-       SELECTION
-    ====================== */
-    setSelectedPayment: (
-      state,
-      action: PayloadAction<Payment | null>
-    ) => {
-      state.selectedPayment = action.payload;
-    },
-
-    /* ======================
-       STRIPE SESSION TRACKING
-    ====================== */
-    setLastStripeSessionId: (
-      state,
-      action: PayloadAction<string>
-    ) => {
-      state.lastStripeSessionId = action.payload;
-    },
-
-    /* ======================
-       STRIPE REDIRECT STATE
-    ====================== */
     setStripeRedirecting: (
       state,
       action: PayloadAction<boolean>
@@ -53,12 +25,7 @@ const paymentSlice = createSlice({
       state.isStripeRedirecting = action.payload;
     },
 
-    /* ======================
-       RESET
-    ====================== */
     resetPaymentState: (state) => {
-      state.selectedPayment = null;
-      state.lastStripeSessionId = null;
       state.isStripeRedirecting = false;
     },
   },
@@ -68,8 +35,6 @@ const paymentSlice = createSlice({
    EXPORTS
 ============================================================ */
 export const {
-  setSelectedPayment,
-  setLastStripeSessionId,
   setStripeRedirecting,
   resetPaymentState,
 } = paymentSlice.actions;

@@ -1,19 +1,14 @@
 import { Request, Response } from "express";
 import { stripe } from "../utils/stripe";
 import db from "../drizzle/db";
-import { 
-  payments, 
-  transferRequests, 
-  lands, 
-  landOwnershipHistory, 
-  auditLogs 
-} from "../drizzle/schema";
+import { payments, transferRequests } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 export const handleStripeWebhook = async (req: Request, res: Response) => {
   const sig = req.headers["stripe-signature"];
 
   if (!sig || typeof sig !== "string") {
+    console.error("[Webhook] Missing Stripe signature");
     return res.status(400).send("Missing Stripe signature");
   }
 
@@ -26,105 +21,96 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: any) {
-    console.error(`\x1b[31m[Webhook Error]\x1b[0m Verification failed: ${err.message}`);
+    console.error("[Webhook Error]", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  console.log(`[Webhook] Event received: ${event.type}`);
+
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
+
     const transferId = Number(session.metadata?.transferId);
     const sessionId = session.id;
-    const paymentIntentId = typeof session.payment_intent === "string" 
-      ? session.payment_intent 
-      : session.payment_intent?.id;
+
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id;
 
     if (!transferId) {
-      console.error("[Webhook Error] No transferId in metadata");
-      return res.status(400).send("Missing metadata");
+      console.error("[Webhook] Missing transferId in metadata");
+      return res.status(400).send("Missing transferId");
     }
 
     try {
+      console.log(`[Webhook] Processing transfer: ${transferId}`);
+
+      const transfer = await db.query.transferRequests.findFirst({
+        where: eq(transferRequests.id, transferId),
+      });
+
+      if (!transfer) {
+        console.error(`[Webhook] Transfer not found: ${transferId}`);
+        return res.status(404).send("Transfer not found");
+      }
+
+      /* ================= IDEMPOTENCY ================= */
+      if (transfer.status === "paid" || transfer.status === "completed") {
+        console.log(`[Webhook] Transfer ${transferId} already processed`);
+        return res.json({ received: true });
+      }
+
       await db.transaction(async (tx) => {
-        // 1. Fetch Transfer details with Land and User info
-        const transfer = await tx.query.transferRequests.findFirst({
-          where: eq(transferRequests.id, transferId),
-          with: { land: true, buyer: true, seller: true }
-        });
+        console.log("[Webhook] Updating payment record");
 
-        if (!transfer) throw new Error("Transfer record not found");
-
-        // 2. Idempotency Check
-        const existingPayment = await tx.query.payments.findFirst({
-          where: eq(payments.stripeSessionId, sessionId),
-        });
-
-        if (existingPayment?.paymentStatus === "completed") {
-          console.log(`[Webhook] Session ${sessionId} already processed.`);
-          return;
-        }
-
-        // 3. Update Payment Record
-        await tx.update(payments)
+        const updatedPayment = await tx
+          .update(payments)
           .set({
             paymentStatus: "completed",
-            stripePaymentIntentId: paymentIntentId,
+            stripePaymentIntentId: paymentIntentId || null,
             confirmedAt: new Date(),
             updatedAt: new Date(),
           })
-          .where(eq(payments.stripeSessionId, sessionId));
+          .where(eq(payments.stripeSessionId, sessionId))
+          .returning();
 
-        // 4. Update Land Ownership (The Handover)
-        await tx.update(lands)
+        if (!updatedPayment.length) {
+          console.error(
+            `[Webhook] No payment found for session: ${sessionId}`
+          );
+          throw new Error("Payment record not found");
+        }
+
+        console.log("[Webhook] Payment updated successfully");
+
+        console.log("[Webhook] Marking transfer as paid");
+
+        const updatedTransfer = await tx
+          .update(transferRequests)
           .set({
-            ownerId: transfer.buyerId,
-            currentOwnerWallet: transfer.buyer.walletAddress,
-            isForSale: false,
-            // In a real blockchain flow, txHash comes from your Minting Service
-            // For now, we use the Stripe Payment Intent as a reference if minting is async
-            blockchainTxHash: paymentIntentId, 
-            updatedAt: new Date(),
+            status: "paid",
+            blockchainStatus: "pending",
           })
-          .where(eq(lands.id, transfer.landId));
+          .where(eq(transferRequests.id, transferId))
+          .returning();
 
-        // 5. Create Ownership History Entry
-        await tx.insert(landOwnershipHistory).values({
-          landId: transfer.landId,
-          fromOwnerId: transfer.sellerId,
-          toOwnerId: transfer.buyerId,
-          fromWallet: transfer.seller.walletAddress,
-          toWallet: transfer.buyer.walletAddress,
-          blockchainTxHash: paymentIntentId,
-        });
-
-        // 6. Finalize Transfer Request Status
-        await tx.update(transferRequests)
-          .set({ 
-            status: "completed", // Moves from 'paid' directly to 'completed'
-            blockchainTxHash: paymentIntentId 
-          })
-          .where(eq(transferRequests.id, transferId));
-
-        // 7. Create Audit Log
-        await tx.insert(auditLogs).values({
-          actionType: "LAND_TRANSFER_SUCCESS",
-          performedBy: transfer.buyerId,
-          landId: transfer.landId,
-          blockchainTxHash: paymentIntentId,
-          metadata: {
-            sessionId: sessionId,
-            amount: transfer.land.priceInKsh,
-            seller: transfer.seller.fullName,
-            buyer: transfer.buyer.fullName
-          }
-        });
-
-        console.log(`\x1b[32m[Registry Success]\x1b[0m Land ${transfer.land.lrNumber} transferred to ${transfer.buyer.fullName}`);
+        if (!updatedTransfer.length) {
+          console.error(
+            `[Webhook] Failed to update transfer: ${transferId}`
+          );
+          throw new Error("Transfer update failed");
+        }
       });
-    } catch (error) {
-      console.error("\x1b[31m[Webhook DB Error]\x1b[0m", error);
-      return res.status(500).send("Database Update Failed");
+
+      console.log(
+        `[Webhook] Payment confirmed. Transfer ${transferId} is ready for blockchain processing`
+      );
+    } catch (error: any) {
+      console.error("[Webhook Fatal Error]", error.message);
+      return res.status(500).send("Processing failed");
     }
   }
 
-  res.json({ received: true });
+  return res.json({ received: true });
 };

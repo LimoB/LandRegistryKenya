@@ -55,23 +55,31 @@ const RegisterLand: React.FC = () => {
       [key]: value,
     }));
   };
+  
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return;
+  if (!file) {
+    alert("Please upload a title deed PDF");
+    return;
+  }
 
-    try {
-      await registerLand({
-        ...formData,
-        sizeInAcres: parseFloat(formData.sizeInAcres),
-        document: file,
-      }).unwrap();
+  try {
+    await registerLand({
+      lrNumber: formData.lrNumber,
+      county: formData.county,
+      constituency: formData.constituency,
+      sizeInAcres: parseFloat(formData.sizeInAcres),
+      landType: formData.landType,
+      document: file, // ✅ just pass file
+    }).unwrap();
 
-      setTimeout(() => navigate("/citizen/my-lands"), 2000);
-    } catch (err) {
-      console.error("Submission failed:", err);
-    }
-  };
+    setTimeout(() => navigate("/citizen/my-lands"), 2000);
+
+  } catch (err) {
+    console.error("Submission failed:", err);
+  }
+};
 
   if (isSuccess) return <SuccessState />;
 

@@ -30,6 +30,7 @@ export interface Payment {
 }
 
 export interface StripeCheckoutResponse {
+  success: boolean;
   url: string;
   sessionId: string;
 }
@@ -41,7 +42,8 @@ export const paymentApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
 
     /* ======================
-       STRIPE CHECKOUT
+       1. STRIPE CHECKOUT
+       → Redirect user to Stripe
     ====================== */
     createStripeCheckout: builder.mutation<
       StripeCheckoutResponse,
@@ -55,14 +57,16 @@ export const paymentApi = baseApi.injectEndpoints({
 
       invalidatesTags: (_result, _error, arg) => [
         { type: "Payment", id: arg.transferId },
+        { type: "Transfer", id: arg.transferId }
       ],
     }),
 
     /* ======================
-       M-PESA PAYMENT RECORD
+       2. M-PESA PAYMENT RECORD
+       → Manual entry → triggers backend → blockchain auto
     ====================== */
     recordMpesaPayment: builder.mutation<
-      Payment,
+      { success: boolean; data: Payment },
       {
         transferId: number;
         amount: string;
@@ -77,14 +81,21 @@ export const paymentApi = baseApi.injectEndpoints({
 
       invalidatesTags: (_result, _error, arg) => [
         { type: "Payment", id: arg.transferId },
+        { type: "Transfer", id: arg.transferId }
       ],
     }),
 
     /* ======================
-       GET PAYMENT BY TRANSFER
+       3. GET PAYMENT STATUS
+       → used for polling UI
     ====================== */
-    getPaymentByTransfer: builder.query<Payment, number>({
+    getPaymentByTransfer: builder.query<Payment | null, number>({
       query: (transferId) => `/payments/transfer/${transferId}`,
+
+      transformResponse: (res: {
+        success: boolean;
+        data: Payment | null;
+      }) => res.data,
 
       providesTags: (_result, _error, transferId) => [
         { type: "Payment", id: transferId },
@@ -92,10 +103,15 @@ export const paymentApi = baseApi.injectEndpoints({
     }),
 
     /* ======================
-       GET ALL PAYMENTS (ADMIN)
+       4. ADMIN: ALL PAYMENTS
     ====================== */
     getAllPayments: builder.query<Payment[], void>({
       query: () => "/payments",
+
+      transformResponse: (res: {
+        success: boolean;
+        data: Payment[];
+      }) => res.data,
 
       providesTags: (result) =>
         result

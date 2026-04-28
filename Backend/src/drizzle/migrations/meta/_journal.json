@@ -15,6 +15,20 @@
       "when": 1776345070675,
       "tag": "0001_oval_kinsey_walden",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777317683610,
+      "tag": "0002_faulty_micromax",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777343311381,
+      "tag": "0003_lush_rhino",
+      "breakpoints": true
     }
   ]
 }

@@ -5,24 +5,21 @@ import {
   landOwnershipHistory,
   users,
   blockchainEvents,
+  transferRequests
 } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import LandRegistry from "./artifacts/LandRegistry.json";
 
 /* ============================
-   ENV SAFETY
+   ENV
 ============================ */
-const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS;
+const CONTRACT_ADDRESS = process.env.LAND_REGISTRY_ADDRESS!;
 const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:7545";
 
-if (!CONTRACT_ADDRESS) {
-  throw new Error("LAND_REGISTRY_ADDRESS missing in .env");
-}
-
 /* ============================
-   BLOCKCHAIN CONNECTION
+   CONNECTION
 ============================ */
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+let provider = new ethers.JsonRpcProvider(RPC_URL);
 
 const contract = new ethers.Contract(
   CONTRACT_ADDRESS,
@@ -31,21 +28,23 @@ const contract = new ethers.Contract(
 );
 
 /* ============================
-   WALLET CACHE
+   CACHE
 ============================ */
 const walletCache = new Map<string, number>();
 
+const normalize = (addr: string) => addr.toLowerCase();
+
 const getUserIdByWallet = async (wallet: string) => {
-  if (walletCache.has(wallet)) {
-    return walletCache.get(wallet)!;
-  }
+  const key = normalize(wallet);
+
+  if (walletCache.has(key)) return walletCache.get(key)!;
 
   const user = await db.query.users.findFirst({
-    where: eq(users.walletAddress, wallet),
+    where: eq(users.walletAddress, key),
   });
 
   if (user?.id) {
-    walletCache.set(wallet, user.id);
+    walletCache.set(key, user.id);
     return user.id;
   }
 
@@ -53,34 +52,38 @@ const getUserIdByWallet = async (wallet: string) => {
 };
 
 /* ============================
-   EVENT DUPLICATE CHECK
+   EVENT SAFETY
 ============================ */
-const isProcessed = async (txHash: string) => {
-  const event = await db.query.blockchainEvents.findFirst({
-    where: eq(blockchainEvents.txHash, txHash),
+const isProcessed = async (txHash: string, logIndex: number) => {
+  const e = await db.query.blockchainEvents.findFirst({
+    where: and(
+      eq(blockchainEvents.txHash, txHash),
+      eq(blockchainEvents.logIndex, logIndex)
+    ),
   });
-
-  return !!event?.processed;
+  return !!e?.processed;
 };
 
-/* ============================
-   SAVE EVENT SAFELY
-============================ */
 const saveEvent = async (data: {
   eventName: string;
   txHash: string;
+  logIndex: number;
   blockNumber?: number;
   payload: any;
 }) => {
-  const existing = await db.query.blockchainEvents.findFirst({
-    where: eq(blockchainEvents.txHash, data.txHash),
+  const exists = await db.query.blockchainEvents.findFirst({
+    where: and(
+      eq(blockchainEvents.txHash, data.txHash),
+      eq(blockchainEvents.logIndex, data.logIndex)
+    ),
   });
 
-  if (existing) return;
+  if (exists) return;
 
   await db.insert(blockchainEvents).values({
     eventName: data.eventName,
     txHash: data.txHash,
+    logIndex: data.logIndex,
     blockNumber: data.blockNumber,
     payload: data.payload,
     processed: false,
@@ -88,32 +91,129 @@ const saveEvent = async (data: {
 };
 
 /* ============================
-   LAND REGISTERED EVENT
+   OWNERSHIP EVENT
 ============================ */
-contract.on(
-  "LandRegistered",
-  async (landId: bigint, lrNumber: string, owner: string, ipfsHash: string, event) => {
-    try {
-      const txHash = event.log.transactionHash;
+const handleOwnershipTransferred = async (
+  landId: bigint,
+  from: string,
+  to: string,
+  mpesaRef: string,
+  event: any
+) => {
+  try {
+    const txHash = event.log.transactionHash;
+    const logIndex = event.log.index;
 
-      if (await isProcessed(txHash)) return;
+    if (await isProcessed(txHash, logIndex)) return;
 
-      await saveEvent({
-        eventName: "LandRegistered",
-        txHash,
-        blockNumber: event.log.blockNumber,
-        payload: {
-          landId: Number(landId),
-          lrNumber,
-          owner,
-          ipfsHash,
-        },
+    const onChainId = Number(landId);
+
+    const land = await db.query.lands.findFirst({
+      where: eq(lands.onChainId, onChainId),
+    });
+
+    if (!land) {
+      console.error("Land not found:", onChainId);
+      return;
+    }
+
+    await saveEvent({
+      eventName: "OwnershipTransferred",
+      txHash,
+      logIndex,
+      blockNumber: event.log.blockNumber,
+      payload: { landId: onChainId, from, to, mpesaRef },
+    });
+
+    const fromOwnerId = await getUserIdByWallet(from);
+    const toOwnerId = await getUserIdByWallet(to);
+
+    const transfer = await db.query.transferRequests.findFirst({
+      where: eq(transferRequests.mpesaReceiptCode, mpesaRef),
+    });
+
+    await db.transaction(async (tx) => {
+
+      await tx.update(lands)
+        .set({
+          ownerId: toOwnerId ?? undefined,
+          currentOwnerWallet: normalize(to),
+          blockchainTxHash: txHash,
+          isForSale: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(lands.id, land.id));
+
+      await tx.update(landOwnershipHistory)
+        .set({ toDate: new Date() })
+        .where(and(
+          eq(landOwnershipHistory.landId, land.id),
+          isNull(landOwnershipHistory.toDate)
+        ));
+
+      await tx.insert(landOwnershipHistory).values({
+        landId: land.id,
+        fromOwnerId: fromOwnerId ?? null,
+        toOwnerId: toOwnerId ?? null,
+        fromWallet: normalize(from),
+        toWallet: normalize(to),
+        mpesaRef,
+        blockchainTxHash: txHash,
+        fromDate: new Date(),
       });
 
-      const ownerId = await getUserIdByWallet(owner);
+      if (transfer) {
+        await tx.update(transferRequests)
+          .set({
+            status: "completed",
+            blockchainTxHash: txHash,
+            blockchainStatus: "confirmed",
+          })
+          .where(eq(transferRequests.id, transfer.id));
+      }
 
-      await db
-        .update(lands)
+      await tx.update(blockchainEvents)
+        .set({ processed: true })
+        .where(and(
+          eq(blockchainEvents.txHash, txHash),
+          eq(blockchainEvents.logIndex, logIndex)
+        ));
+    });
+
+    console.log(`Ownership synced (Land ${onChainId})`);
+  } catch (err) {
+    console.error("Ownership sync failed:", err);
+  }
+};
+
+/* ============================
+   LAND REGISTER EVENT
+============================ */
+const handleLandRegistered = async (
+  landId: bigint,
+  lrNumber: string,
+  owner: string,
+  ipfsHash: string,
+  event: any
+) => {
+  try {
+    const txHash = event.log.transactionHash;
+    const logIndex = event.log.index;
+
+    if (await isProcessed(txHash, logIndex)) return;
+
+    await saveEvent({
+      eventName: "LandRegistered",
+      txHash,
+      logIndex,
+      blockNumber: event.log.blockNumber,
+      payload: { landId: Number(landId), lrNumber, owner, ipfsHash },
+    });
+
+    const ownerId = await getUserIdByWallet(owner);
+
+    await db.transaction(async (tx) => {
+      await tx.update(lands)
         .set({
           onChainId: Number(landId),
           verificationStatus: "verified",
@@ -122,107 +222,60 @@ contract.on(
         })
         .where(eq(lands.lrNumber, lrNumber));
 
-      await db
-        .update(blockchainEvents)
+      await tx.update(blockchainEvents)
         .set({ processed: true })
-        .where(eq(blockchainEvents.txHash, txHash));
+        .where(and(
+          eq(blockchainEvents.txHash, txHash),
+          eq(blockchainEvents.logIndex, logIndex)
+        ));
+    });
 
-      console.log("Land event processed");
-    } catch (err) {
-      console.error("LandRegistered sync failed:", err);
-    }
+    console.log("Land registered synced");
+  } catch (err) {
+    console.error("Land sync failed:", err);
   }
-);
+};
 
 /* ============================
-   OWNERSHIP TRANSFERRED EVENT
+   RECONNECT LOGIC
 ============================ */
-contract.on(
-  "OwnershipTransferred",
-  async (landId: bigint, from: string, to: string, mpesaRef: string, event) => {
-    try {
-      const txHash = event.log.transactionHash;
+const reconnect = () => {
+  console.log("Reconnecting provider...");
 
-      if (await isProcessed(txHash)) return;
+  provider = new ethers.JsonRpcProvider(RPC_URL);
 
-      const onChainId = Number(landId);
+  contract.removeAllListeners();
 
-      const land = await db.query.lands.findFirst({
-        where: eq(lands.onChainId, onChainId),
-      });
+  contract.connect(provider);
 
-      if (!land) {
-        console.error("Land not found for onChainId:", onChainId);
-        return;
-      }
+  attachListeners();
+};
 
-      await saveEvent({
-        eventName: "OwnershipTransferred",
-        txHash,
-        blockNumber: event.log.blockNumber,
-        payload: {
-          landId: onChainId,
-          from,
-          to,
-          mpesaRef,
-        },
-      });
+/* ============================
+   ATTACH LISTENERS
+============================ */
+const attachListeners = () => {
+  contract.on("OwnershipTransferred", handleOwnershipTransferred);
+  contract.on("LandRegistered", handleLandRegistered);
 
-      const fromOwnerId = await getUserIdByWallet(from);
-      const toOwnerId = await getUserIdByWallet(to);
-
-      /* ============================
-         UPDATE LAND OWNER
-      ============================ */
-      await db
-        .update(lands)
-        .set({
-          ownerId: toOwnerId ?? undefined,
-          updatedAt: new Date(),
-        })
-        .where(eq(lands.id, land.id));
-
-      /* ============================
-         CLOSE PREVIOUS OWNERSHIP
-      ============================ */
-      await db
-        .update(landOwnershipHistory)
-        .set({
-          toDate: new Date(),
-        })
-        .where(eq(landOwnershipHistory.landId, land.id));
-
-      /* ============================
-         INSERT NEW OWNERSHIP RECORD
-      ============================ */
-      await db.insert(landOwnershipHistory).values({
-        landId: land.id,
-        fromOwnerId: fromOwnerId ?? null,
-        toOwnerId: toOwnerId ?? null,
-        fromWallet: from,
-        toWallet: to,
-        mpesaRef,
-        blockchainTxHash: txHash,
-        fromDate: new Date(),
-      });
-
-      await db
-        .update(blockchainEvents)
-        .set({ processed: true })
-        .where(eq(blockchainEvents.txHash, txHash));
-
-      console.log("Ownership event processed");
-    } catch (err) {
-      console.error("Ownership sync failed:", err);
-    }
-  }
-);
+  provider.on("error", reconnect);
+};
 
 /* ============================
    START LISTENER
 ============================ */
 export const startBlockchainListener = () => {
-  console.log("Blockchain listener initialized");
+  contract.removeAllListeners();
+  attachListeners();
 
-  contract.removeAllListeners(); // prevents duplicate listeners on restart
+  console.log("Blockchain listener started");
 };
+
+/* ============================
+   GRACEFUL SHUTDOWN
+============================ */
+process.on("SIGINT", () => {
+  console.log("Shutting down listener...");
+  contract.removeAllListeners();
+  process.exit(0);
+});

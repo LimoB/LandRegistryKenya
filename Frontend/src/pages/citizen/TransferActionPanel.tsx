@@ -22,7 +22,7 @@ interface ApiError {
 }
 
 interface ActionPanelProps {
-  selectedLand: Land | undefined; // Required to fix the ts(2322) error
+  selectedLand: Land | undefined;
   onSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
   isError: boolean;
@@ -38,20 +38,26 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
   error,
   isOwnLandSelected,
 }) => {
+
   /* ================================
-     ERROR HANDLING LOGIC
+     ERROR HANDLING
   ================================ */
   const getErrorMessage = () => {
     if (!isError || !error) return null;
+
     const apiErr = error as ApiError;
-    return apiErr.data?.error || apiErr.data?.message || "Something went wrong. Please try again.";
+
+    return (
+      apiErr?.data?.error ||
+      apiErr?.data?.message ||
+      "Transaction failed. Please try again."
+    );
   };
 
-  // Button is disabled if no land is selected, loading, or user owns the land
   const isDisabled = !selectedLand || isLoading || isOwnLandSelected;
 
   /* ================================
-     EMPTY STATE (NO SELECTION)
+     EMPTY STATE
   ================================ */
   if (!selectedLand) {
     return (
@@ -61,20 +67,27 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
         </div>
         <div>
           <p className="text-slate-600 font-bold">Select Property</p>
-          <p className="text-xs text-slate-400 mt-1">Pick a land from the marketplace to view purchase details.</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Choose a verified land title to begin transfer.
+          </p>
         </div>
       </div>
     );
   }
 
   /* ================================
-     ACTIVE STATE
+     SAFE PRICE FORMAT
+  ================================ */
+  const price = Number(selectedLand.priceInKsh || 0);
+
+  /* ================================
+     MAIN UI
   ================================ */
   return (
     <form onSubmit={onSubmit} className="w-full animate-in fade-in slide-in-from-right-4 duration-500">
       <div className="border border-slate-200 rounded-3xl p-8 bg-white shadow-xl shadow-slate-100 space-y-8">
         
-        {/* HEADER & PRICE */}
+        {/* HEADER */}
         <div className="space-y-4">
           <div className="flex items-center gap-3 text-blue-600">
             <div className="p-2 bg-blue-50 rounded-xl">
@@ -85,35 +98,54 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
             </h3>
           </div>
 
+          {/* PRICE */}
           <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-center">
             <span className="text-sm font-bold text-slate-500">Total Price</span>
             <span className="text-2xl font-black text-blue-700">
-              KES {selectedLand.priceInKsh?.toLocaleString()}
+              KES {price.toLocaleString()}
             </span>
           </div>
         </div>
 
-        {/* TRUST STEPS */}
+        {/* PROCESS EXPLANATION */}
         <div className="space-y-4 pt-4 border-t border-slate-50">
+
           <div className="flex items-start gap-4">
             <div className="mt-1 p-1 bg-emerald-100 text-emerald-600 rounded-full">
               <ShieldCheck size={14} />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800">Secure Escrow</p>
-              <p className="text-xs text-slate-500">Payments are encrypted and verified by blockchain.</p>
+              <p className="text-sm font-bold text-slate-800">Secure Payment</p>
+              <p className="text-xs text-slate-500">
+                Pay via Stripe or M-Pesa. Payment is verified instantly.
+              </p>
             </div>
           </div>
-          
+
+          <div className="flex items-start gap-4">
+            <div className="mt-1 p-1 bg-blue-100 text-blue-600 rounded-full">
+              <Wallet size={14} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">Auto Blockchain Transfer</p>
+              <p className="text-xs text-slate-500">
+                Ownership updates automatically on-chain after payment confirmation.
+              </p>
+            </div>
+          </div>
+
           <div className="flex items-start gap-4">
             <div className="mt-1 p-1 bg-amber-100 text-amber-600 rounded-full">
               <Clock size={14} />
             </div>
             <div>
-              <p className="text-sm font-bold text-slate-800">Legal Review</p>
-              <p className="text-xs text-slate-500">Manual approval by registry officers takes 24-48h.</p>
+              <p className="text-sm font-bold text-slate-800">Final Registry Update</p>
+              <p className="text-xs text-slate-500">
+                Land records and ownership are updated instantly.
+              </p>
             </div>
           </div>
+
         </div>
 
         {/* ALERTS */}
@@ -123,7 +155,7 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
               <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-700">
                 <AlertCircle size={18} className="shrink-0" />
                 <p className="text-xs font-bold leading-tight">
-                  You are the owner of this title. Purchase restricted.
+                  You cannot purchase your own land.
                 </p>
               </div>
             )}
@@ -131,13 +163,15 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
             {isError && (
               <div className="flex items-center gap-3 p-4 bg-orange-50 border border-orange-100 rounded-2xl text-orange-700">
                 <AlertCircle size={18} className="shrink-0" />
-                <p className="text-xs font-medium italic">{getErrorMessage()}</p>
+                <p className="text-xs font-medium italic">
+                  {getErrorMessage()}
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {/* ACTION BUTTON */}
+        {/* BUTTON */}
         <div className="pt-2">
           <button
             type="submit"
@@ -162,7 +196,7 @@ const TransferActionPanel: React.FC<ActionPanelProps> = ({
           </button>
           
           <p className="mt-4 text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest">
-            Registry-Linked Transaction
+            Blockchain-secured registry transaction
           </p>
         </div>
       </div>

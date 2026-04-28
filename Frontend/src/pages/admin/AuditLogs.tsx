@@ -1,36 +1,42 @@
 import React, { useState, useMemo } from "react";
 import { 
   ShieldAlert, Terminal, Search, RefreshCcw, 
-  ChevronRight, Lock, User, Database, History, Loader2, ExternalLink
-} from "lucide-react";
+  ChevronRight, Lock, User, Database, Loader2} from "lucide-react";
+// Ensure this matches the relative path to your auditApi file
 import { useGetAuditLogsQuery, type AuditLog } from "../../features/audit/auditApi";
 
 const AuditLogs: React.FC = () => {
-  const { data: logs, isLoading, refetch, isFetching } = useGetAuditLogsQuery();
+  // Accessing 'data' which contains the AuditResponse object { success, count, data: AuditLog[] }
+  const { data: response, isLoading, refetch, isFetching } = useGetAuditLogsQuery();
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Clean Search Logic
+  // Extracted logs array from the response object
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const logs = response?.data || [];
+
+  /* ================= SEARCH LOGIC ================= */
   const filteredLogs = useMemo(() => {
     if (!logs) return [];
     return logs.filter((log: AuditLog) => {
       const searchStr = searchTerm.toLowerCase();
+      // Updated to match your AuditLog interface: actionType and description
       return (
-        log.action.toLowerCase().includes(searchStr) ||
-        log.details.toLowerCase().includes(searchStr) ||
-        log.blockchainTxHash?.toLowerCase().includes(searchStr) ||
-        log.actor?.fullName?.toLowerCase().includes(searchStr)
+        log.actionType.toLowerCase().includes(searchStr) ||
+        (log.description || "").toLowerCase().includes(searchStr) ||
+        // If your actor data is nested in the response, check availability
+        log.performedBy.toString().includes(searchStr)
       );
     });
   }, [logs, searchTerm]);
 
-  // Dynamic Badge Styling
+  /* ================= DYNAMIC BADGE STYLING ================= */
   const getActionStyle = (action: string) => {
     const act = action.toUpperCase();
-    if (act.includes("SECURITY") || act.includes("REJECT") || act.includes("FAILED")) 
+    if (act.includes("SECURITY") || act.includes("REJECT") || act.includes("FAILED") || act.includes("DELETE")) 
         return "bg-red-500/10 text-red-500 border-red-500/20";
-    if (act.includes("LAND") || act.includes("MINT") || act.includes("TRANSFER") || act.includes("APPROVED")) 
+    if (act.includes("LAND") || act.includes("MINT") || act.includes("TRANSFER") || act.includes("APPROVED") || act.includes("CREATE")) 
         return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
-    if (act.includes("USER") || act.includes("PROMOTED") || act.includes("ROLE")) 
+    if (act.includes("USER") || act.includes("PROMOTED") || act.includes("ROLE") || act.includes("LOGIN")) 
         return "bg-blue-500/10 text-blue-500 border-blue-500/20";
     return "bg-slate-500/10 text-slate-500 border-slate-500/20";
   };
@@ -72,7 +78,7 @@ const AuditLogs: React.FC = () => {
           <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-500 transition-colors" size={18} />
           <input 
             type="text" 
-            placeholder="Search by Actor, Land ID, or TX Hash..."
+            placeholder="Search by Action, Description, or User ID..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-14 pr-6 py-5 bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-900 rounded-[1.5rem] text-xs font-bold outline-none focus:ring-4 ring-blue-500/5 transition-all dark:text-white uppercase tracking-tighter"
@@ -112,41 +118,31 @@ const AuditLogs: React.FC = () => {
 
               {/* Action Category Badge */}
               <div className="md:w-44 px-2">
-                <span className={`inline-block w-full text-center py-2.5 px-3 rounded-lg border text-[9px] font-black uppercase tracking-[0.1em] ${getActionStyle(log.action)}`}>
-                  {log.action.replace(/_/g, ' ')}
+                <span className={`inline-block w-full text-center py-2.5 px-3 rounded-lg border text-[9px] font-black uppercase tracking-[0.1em] ${getActionStyle(log.actionType)}`}>
+                  {log.actionType.replace(/_/g, ' ')}
                 </span>
               </div>
 
-              {/* Details & Blockchain Hash */}
+              {/* Details & Metadata */}
               <div className="flex-1 px-4 py-2">
                 <div className="flex items-center gap-2 mb-1">
                   <User size={12} className="text-blue-600" />
                   <span className="text-xs font-black text-slate-900 dark:text-white">
-                    {log.actor?.fullName || `ID: ${log.performedBy}`}
+                    User ID: {log.performedBy}
                   </span>
                   <ChevronRight size={10} className="text-slate-300" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{log.details}</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                    {log.description || "No description provided"}
+                  </span>
                 </div>
                 
                 <div className="flex items-center gap-3">
                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-900 px-2 py-0.5 rounded border border-slate-100 dark:border-slate-800">
                       <Database size={10} className="text-slate-400" />
                       <span className="text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest">
-                        Ref: #{log.landId || "SYS"}
+                        Land ID: {log.landId || "SYSTEM"}
                       </span>
                    </div>
-                   {log.blockchainTxHash && (
-                     <a 
-                       href={`https://sepolia.etherscan.io/tx/${log.blockchainTxHash}`} 
-                       target="_blank"
-                       rel="noreferrer"
-                       className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded border border-blue-100/30 hover:bg-blue-100 transition-colors"
-                     >
-                        <History size={10} className="text-blue-600" />
-                        <span className="text-[8px] font-mono font-bold text-blue-600">TX: {log.blockchainTxHash.substring(0, 10)}...</span>
-                        <ExternalLink size={8} className="text-blue-400" />
-                     </a>
-                   )}
                 </div>
               </div>
 
@@ -167,7 +163,7 @@ const AuditLogs: React.FC = () => {
 
       {/* 4. Footer Pagination/Sync */}
       <div className="flex items-center justify-between text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] pt-4 px-6">
-        <p>Total Records: {logs?.length || 0}</p>
+        <p>Total Records: {response?.count || 0}</p>
         <div className="flex items-center gap-2">
            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
            <span className="text-emerald-500 italic">Blockchain Verified Stream</span>

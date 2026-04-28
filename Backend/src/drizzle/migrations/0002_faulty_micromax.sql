@@ -1,0 +1,1 @@
+ALTER TABLE "blockchain_events" ADD COLUMN "log_index" integer NOT NULL;

@@ -7,76 +7,108 @@ import {
 } from "../services/index";
 import { getUserId, getUserRole } from "../../utils/auth.util";
 
-/**
- * Fetch pending transfers with Contextual Filtering
- */
+/* ============================================================
+   1. GET PENDING TRANSFERS (ROLE-AWARE)
+============================================================ */
 export const getPending = async (req: Request, res: Response, next: NextFunction) => {
+  const traceId = Math.random().toString(36).substring(7);
+
   try {
     const userId = getUserId(req);
-    const userRole = getUserRole(req); 
+    const userRole = getUserRole(req);
 
-    // 1. Validation Check: Ensure we have both ID and Role
+    console.log(`\x1b[36m[Controller]\x1b[0m getPending (Trace: ${traceId})`);
+    console.log(`[Auth] userId=${userId}, role=${userRole}`);
+
     if (!userId || !userRole) {
-      console.error(`[Auth Error] Missing credentials - ID: ${userId}, Role: ${userRole}`);
+      console.error(`\x1b[31m[Auth Error]\x1b[0m Missing credentials`);
       const error: any = new Error("Unauthorized: Invalid session or missing permissions");
       error.statusCode = 401;
       throw error;
     }
 
-    console.log(`%c[API] getPending hit by ${userRole} (ID: ${userId})`, "color: #4f46e5; font-weight: bold;");
-
-    // 2. Service Call: TypeScript is now happy because userRole is guaranteed to be a string here
     const data = await getPendingTransfersService(userId, userRole);
-    
-    console.log(`[API] successfully retrieved ${data.length} records for ${userRole}`);
+
+    console.log(`\x1b[32m[Success]\x1b[0m Retrieved ${data.length} pending transfers`);
 
     return res.status(200).json({
       success: true,
       roleScope: userRole,
       count: data.length,
-      data: data
+      data
     });
+
   } catch (error: any) {
-    console.error("[API Error] getPending:", error.message);
+    console.error(`\x1b[31m[Error]\x1b[0m getPending failed (Trace: ${traceId}):`, error.message);
     next(error);
   }
 };
 
-/**
- * Step 1: Officer approves the initial transfer request
- */
+/* ============================================================
+   2. APPROVE TRANSFER (OFFICER)
+   pending → payment_pending
+============================================================ */
 export const approveTransfer = async (req: Request, res: Response, next: NextFunction) => {
+  const traceId = Math.random().toString(36).substring(7);
+
   try {
     const officerId = getUserId(req);
+    const transferId = Number(req.params.id);
+
+    console.log(`\x1b[35m[Controller]\x1b[0m approveTransfer (Trace: ${traceId})`);
+    console.log(`[Data] officerId=${officerId}, transferId=${transferId}`);
+
     if (!officerId) {
       const error: any = new Error("Unauthorized: Officer ID required");
       error.statusCode = 401;
       throw error;
     }
 
-    const result = await approveTransferService(Number(req.params.id), officerId);
-    
+    if (isNaN(transferId)) {
+      const error: any = new Error("Invalid transfer ID");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const result = await approveTransferService(transferId, officerId);
+
+    console.log(`\x1b[32m[Success]\x1b[0m Transfer ${transferId} approved`);
+
     return res.status(200).json({
       success: true,
-      message: "Transfer approved and moved to pending finalization",
+      message: "Transfer approved. Awaiting payment.",
       data: result
     });
+
   } catch (error: any) {
+    console.error(`\x1b[31m[Error]\x1b[0m approveTransfer failed (Trace: ${traceId}):`, error.message);
     next(error);
   }
 };
 
-/**
- * Officer rejects a transfer request
- */
+/* ============================================================
+   3. REJECT TRANSFER (OFFICER)
+============================================================ */
 export const rejectTransfer = async (req: Request, res: Response, next: NextFunction) => {
+  const traceId = Math.random().toString(36).substring(7);
+
   try {
     const officerId = getUserId(req);
+    const transferId = Number(req.params.id);
     const { reason } = req.body;
+
+    console.log(`\x1b[33m[Controller]\x1b[0m rejectTransfer (Trace: ${traceId})`);
+    console.log(`[Data] officerId=${officerId}, transferId=${transferId}, reason=${reason}`);
 
     if (!officerId) {
       const error: any = new Error("Unauthorized");
       error.statusCode = 401;
+      throw error;
+    }
+
+    if (isNaN(transferId)) {
+      const error: any = new Error("Invalid transfer ID");
+      error.statusCode = 400;
       throw error;
     }
 
@@ -86,41 +118,59 @@ export const rejectTransfer = async (req: Request, res: Response, next: NextFunc
       throw error;
     }
 
-    const result = await rejectTransferService(Number(req.params.id), officerId, reason);
-    
+    const result = await rejectTransferService(transferId, officerId, reason);
+
+    console.log(`\x1b[32m[Success]\x1b[0m Transfer ${transferId} rejected`);
+
     return res.status(200).json({
       success: true,
       message: "Transfer request rejected",
       data: result
     });
+
   } catch (error: any) {
+    console.error(`\x1b[31m[Error]\x1b[0m rejectTransfer failed (Trace: ${traceId}):`, error.message);
     next(error);
   }
 };
 
-/**
- * Step 2: Finalize the transfer (The Blockchain Step)
- */
+/* ============================================================
+   4. FINALIZE TRANSFER (MANUAL RETRY ONLY)
+   ⚠️ SYSTEM FLOW NOW AUTO-CALLS THIS
+============================================================ */
 export const finalizeTransfer = async (req: Request, res: Response, next: NextFunction) => {
+  const traceId = Math.random().toString(36).substring(7);
+
   try {
-    const officerId = getUserId(req);
-    if (!officerId) {
-      const error: any = new Error("Unauthorized");
-      error.statusCode = 401;
+    const transferId = Number(req.params.id);
+
+    console.log(`\x1b[31m[Controller]\x1b[0m MANUAL finalizeTransfer (Trace: ${traceId})`);
+    console.log(`[Data] transferId=${transferId}`);
+
+    if (isNaN(transferId)) {
+      const error: any = new Error("Invalid transfer ID");
+      error.statusCode = 400;
       throw error;
     }
 
-    const result = await finalizeTransferService(Number(req.params.id), officerId);
-    
+    // ✅ FIX: ONLY ONE ARGUMENT
+    const result = await finalizeTransferService(transferId);
+
+    console.log(`\x1b[32m[Success]\x1b[0m Transfer ${transferId} manually finalized`);
+
     return res.status(200).json({
       success: true,
-      message: "Transfer finalized successfully on the blockchain",
+      message: "Transfer finalized successfully on blockchain",
       data: result
     });
+
   } catch (error: any) {
-    if (error.message.includes("Blockchain") || error.message.includes("contract")) {
+    console.error(`\x1b[31m[Error]\x1b[0m finalizeTransfer failed (Trace: ${traceId}):`, error.message);
+
+    if (error.message?.toLowerCase().includes("blockchain")) {
       error.statusCode = 500;
     }
+
     next(error);
   }
 };

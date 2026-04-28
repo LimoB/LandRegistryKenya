@@ -1,9 +1,9 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, or } from "drizzle-orm";
 import db from "../../drizzle/db";
 import { transferRequests, lands, auditLogs } from "../../drizzle/schema";
 
 /**
- * Creates a new transfer request initiated by a Buyer (Citizen)
+ * 🔥 CREATE TRANSFER REQUEST (HARDENED VERSION)
  */
 export const createTransferRequestService = async (
   buyerId: number,
@@ -11,54 +11,101 @@ export const createTransferRequestService = async (
 ) => {
   console.log(`[Service] Initiating transfer for Land ID: ${landId} by Buyer: ${buyerId}`);
 
-  // 1. Fetch Land Details
-  const land = await db.query.lands.findFirst({
-    where: eq(lands.id, landId)
-  });
+  return await db.transaction(async (tx) => {
 
-  // --- VALIDATION BLOCKS ---
-  if (!land) throw new Error("Land not found in the registry");
-  if (land.ownerId === buyerId) throw new Error("Ownership conflict: You already own this asset.");
-  if (!land.isForSale) throw new Error("This asset is not currently listed for sale.");
-  if (land.verificationStatus !== "verified") throw new Error("Registry Error: Land must be verified before transfer.");
+    /* ============================================================
+       1. FETCH LAND
+    ============================================================ */
+    const land = await tx.query.lands.findFirst({
+      where: eq(lands.id, landId)
+    });
 
-  // 2. Global Check: Prevent multiple simultaneous transfers for the same plot
-  const existingAny = await db.query.transferRequests.findFirst({
-    where: and(
-      eq(transferRequests.landId, landId),
-      eq(transferRequests.status, "pending")
-    )
-  });
-  
-  if (existingAny) {
-    console.warn(`[Service] Blocked: Land ${landId} already has a pending request ID: ${existingAny.id}`);
-    throw new Error("This land already has an active pending transfer request.");
-  }
+    if (!land) throw new Error("Land not found");
 
-  // 3. Insert the new request
-  const [request] = await db
-    .insert(transferRequests)
-    .values({
-      landId,
-      buyerId,
-      sellerId: land.ownerId,
-      status: "pending"
-    })
-    .returning();
-
-  // 4. Audit Log for transparency
-  await db.insert(auditLogs).values({
-    actionType: "TRANSFER_REQUEST_CREATED",
-    performedBy: buyerId,
-    landId,
-    metadata: { 
-      transferId: request.id,
-      buyerId,
-      sellerId: land.ownerId 
+    /* ============================================================
+       2. VALIDATION
+    ============================================================ */
+    if (land.ownerId === buyerId) {
+      throw new Error("You already own this land");
     }
-  });
 
-  console.log(`%c[Service Success] Transfer ID ${request.id} created successfully.`, "color: #10b981; font-weight: bold;");
-  
-  return request;
+    if (!land.isForSale) {
+      throw new Error("Land is not available for sale");
+    }
+
+    if (land.verificationStatus !== "verified") {
+      throw new Error("Land must be verified before transfer");
+    }
+
+    /* ============================================================
+       3. BLOCK ALL ACTIVE TRANSFERS (FIXED)
+    ============================================================ */
+    const activeStatuses = [
+      "pending",
+      "payment_pending",
+      "paid"
+    ] as const;
+
+    const activeBlockchainStatuses = [
+      "pending",
+      "processing",
+      "submitted"
+    ] as const;
+
+    const existing = await tx.query.transferRequests.findFirst({
+      where: and(
+        eq(transferRequests.landId, landId),
+        or(
+          inArray(transferRequests.status, activeStatuses),
+          inArray(transferRequests.blockchainStatus, activeBlockchainStatuses)
+        )
+      )
+    });
+
+    if (existing) {
+      console.warn(`[Blocked] Active transfer exists: ${existing.id}`);
+      throw new Error("This land already has an ongoing transfer process");
+    }
+
+    /* ============================================================
+       4. LOCK LAND (PREVENT PARALLEL SALES)
+    ============================================================ */
+    await tx.update(lands)
+      .set({
+        isForSale: false,
+        updatedAt: new Date()
+      })
+      .where(eq(lands.id, landId));
+
+    /* ============================================================
+       5. CREATE TRANSFER REQUEST
+    ============================================================ */
+    const [request] = await tx.insert(transferRequests)
+      .values({
+        landId,
+        buyerId,
+        sellerId: land.ownerId,
+        status: "pending",
+        blockchainStatus: "pending"
+      })
+      .returning();
+
+    /* ============================================================
+       6. AUDIT LOG
+    ============================================================ */
+    await tx.insert(auditLogs).values({
+      actionType: "TRANSFER_REQUEST_CREATED",
+      performedBy: buyerId,
+      landId,
+      metadata: {
+        transferId: request.id,
+        buyerId,
+        sellerId: land.ownerId
+      }
+    });
+
+    console.log(`[SUCCESS] Transfer ${request.id} created`);
+
+    return request;
+  });
 };

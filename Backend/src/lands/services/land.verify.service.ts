@@ -7,43 +7,63 @@ import { registerLandOnChainService } from "../../blockchain/services";
  * Verifies land locally and mints the record on the blockchain
  */
 export const verifyLandService = async (landId: number, officerId: number) => {
+  console.log(`[SERVICE] Starting verification for land ID: ${landId}`);
+
   // 1. Fetch land details with owner information
   const land = await db.query.lands.findFirst({
     where: eq(lands.id, landId),
     with: { owner: true }
   });
 
-  if (!land) throw new Error("Land not found");
-  if (land.verificationStatus === "verified") throw new Error("Land already verified");
-  if (!land.owner?.walletAddress) throw new Error("Owner wallet missing. Cannot mint on-chain.");
+  if (!land) {
+    console.error("[SERVICE] Land not found");
+    throw new Error("Land not found");
+  }
 
-  // 2. Blockchain Minting
+  // Prevent duplicate execution (critical)
+  if (land.blockchainTxHash) {
+    console.log("[SERVICE] Land already minted on-chain, skipping");
+
+    return {
+      success: true,
+      message: "Land already verified",
+      land
+    };
+  }
+
+  if (!land.owner?.walletAddress) {
+    console.error("[SERVICE] Missing owner wallet");
+    throw new Error("Owner wallet missing. Cannot mint on-chain.");
+  }
+
   let txHash: string;
   let finalBlockNumber: number;
 
+  // 2. Blockchain Minting
   try {
-    // Your blockchain service already handles tx.wait() and returns { hash, blockNumber }
+    console.log("[SERVICE] Sending transaction to blockchain...");
+
     const receipt = await registerLandOnChainService(
       land.owner.walletAddress,
       land.lrNumber,
       land.ipfsDocHash || "N/A"
     );
 
-    // No need for as any or .wait() here because we are receiving plain data
     txHash = receipt.hash;
     finalBlockNumber = Number(receipt.blockNumber);
 
-    console.log(`[SERVICE] Blockchain record finalized in block: ${finalBlockNumber}`);
+    console.log(`[SERVICE] Blockchain confirmed. TX: ${txHash}`);
+    console.log(`[SERVICE] Included in block: ${finalBlockNumber}`);
   } catch (error: any) {
-    console.error("Blockchain Error Context:", error);
-    // Standardizing error message for the frontend
+    console.error("[SERVICE] Blockchain mint failed:", error);
     throw new Error(`Blockchain mint failed: ${error.message}`);
   }
 
   // 3. Database Finalization (Atomic Transaction)
   try {
+    console.log("[SERVICE] Updating local database...");
+
     return await db.transaction(async (trx) => {
-      // Update land status in PostgreSQL
       const [updated] = await trx
         .update(lands)
         .set({
@@ -57,7 +77,6 @@ export const verifyLandService = async (landId: number, officerId: number) => {
         .where(eq(lands.id, landId))
         .returning();
 
-      // Log the action in Audit Logs
       await trx.insert(auditLogs).values({
         actionType: "LAND_VERIFIED",
         performedBy: officerId,
@@ -66,6 +85,8 @@ export const verifyLandService = async (landId: number, officerId: number) => {
         createdAt: new Date()
       });
 
+      console.log("[SERVICE] Database updated successfully");
+
       return {
         success: true,
         message: "Land verified successfully and minted on-chain",
@@ -73,8 +94,13 @@ export const verifyLandService = async (landId: number, officerId: number) => {
       };
     });
   } catch (dbError: any) {
-    console.error("Database Transaction Error:", dbError);
-    // If we reach here, the land is minted on-chain but the DB failed to update.
-    throw new Error(`On-chain success, but local DB update failed: ${dbError.message}`);
+    console.error("[SERVICE] CRITICAL: DB failed AFTER blockchain success", dbError);
+
+    // Do NOT throw fatal error → prevents retry loops
+    return {
+      success: false,
+      message: "Blockchain succeeded but DB update failed. Manual reconciliation required.",
+      txHash
+    };
   }
 };
