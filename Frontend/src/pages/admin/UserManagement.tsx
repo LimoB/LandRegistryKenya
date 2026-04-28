@@ -1,7 +1,6 @@
 import React from "react";
 import {
   useGetUsersQuery,
-  useDeleteUserMutation,
   useUpdateUserMutation,
   type User,
 } from "../../features/users/userApi";
@@ -11,7 +10,6 @@ import { setSelectedUser, openViewModal } from "../../features/users/userSlice";
 import {
   Users,
   ShieldCheck,
-  Trash2,
   BadgeCheck,
   Mail,
   Eye,
@@ -23,22 +21,11 @@ const UserManagement: React.FC = () => {
   const { data: response, isLoading } = useGetUsersQuery();
   const users = response?.data || [];
 
-  const [deleteUser] = useDeleteUserMutation();
   const [updateUser] = useUpdateUserMutation();
 
   /* ======================
      HANDLERS
   ====================== */
-
-  const handleDelete = async (id: number) => {
-    if (
-      window.confirm(
-        "Are you sure? This will revoke all access for this user."
-      )
-    ) {
-      await deleteUser(id);
-    }
-  };
 
   const toggleVerification = async (user: User) => {
     await updateUser({
@@ -86,7 +73,7 @@ const UserManagement: React.FC = () => {
               <th className="px-8 py-5">Role</th>
               <th className="px-8 py-5">Status</th>
               <th className="px-8 py-5">Wallet Address</th>
-              <th className="px-8 py-5 text-right">Management</th>
+              <th className="px-8 py-5 text-right">View</th>
             </tr>
           </thead>
 
@@ -165,25 +152,14 @@ const UserManagement: React.FC = () => {
                     {user.walletAddress.slice(-4)}
                   </td>
 
-                  {/* Actions */}
+                  {/* View Only */}
                   <td className="px-8 py-5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {/* VIEW */}
-                      <button
-                        onClick={() => handleView(user)}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all"
-                      >
-                        <Eye size={18} />
-                      </button>
-
-                      {/* REVOKE (DELETE) */}
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-xl transition-all"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleView(user)}
+                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-xl transition-all"
+                    >
+                      <Eye size={18} />
+                    </button>
                   </td>
                 </tr>
               ))

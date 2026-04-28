@@ -22,8 +22,8 @@ import {
   History,
   UserCircle,
   Activity,
-  Blocks,
-  KeyRound,
+  // Blocks,
+  // KeyRound,
   ChevronDown,
   FileText,
   CreditCard
@@ -62,8 +62,8 @@ const Sidebar: React.FC<SidebarProps> = ({ role }) => {
         { name: "Fraud Monitoring", path: "/admin/fraud", icon: AlertTriangle },
       ],
       blockchain: [
-        { name: "Events", path: "/admin/blockchain", icon: Blocks },
-        { name: "Idempotency", path: "/admin/idempotency", icon: KeyRound },
+        // { name: "Events", path: "/admin/blockchain", icon: Blocks },
+        // { name: "Idempotency", path: "/admin/idempotency", icon: KeyRound },
       ],
     },
 
